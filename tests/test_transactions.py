@@ -2,14 +2,14 @@ from decimal import Decimal
 
 from sqlalchemy import select, func
 
-from bot.database.main import Database
+from packages.database.engine import Database
 import pytest
 
-from bot.database.methods.transactions import buy_item_transaction, \
+from packages.database.methods.transactions import buy_item_transaction, \
     process_payment_with_referral, \
     admin_balance_change
-from bot.database.methods.create import create_pending_payment
-from bot.database.models.main import BoughtGoods, ItemValues, Goods, Payments, Operations, ReferralEarnings, User
+from packages.database.methods.create import create_pending_payment
+from packages.database.models.main import BoughtGoods, ItemValues, Goods, Payments, Operations, ReferralEarnings, User
 
 
 async def _get_balance(telegram_id: int) -> float:

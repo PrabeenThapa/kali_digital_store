@@ -4,8 +4,8 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 from sqlalchemy import select
 
-from bot.database.methods.create import create_user, create_referral_earning
-from bot.database.methods.read import (
+from packages.database.methods.create import create_user, create_referral_earning
+from packages.database.methods.read import (
     get_one_referral_earning, check_user_referrals, get_referral_earnings_stats,
 )
 
@@ -19,7 +19,7 @@ class TestReferralPage:
         call = make_callback_query(data="referral_system", user_id=700001)
 
         # Import the module and get the handler from the router
-        import bot.handlers.user.referral_system as ref_mod
+        import apps.telegram_bot.handlers.user.referral_system as ref_mod
         # The first handler in the router for F.data == "referral_system"
         # We'll call it directly by finding it from router callbacks
         handler = None
@@ -58,7 +58,7 @@ class TestReferralPage:
 class TestViewReferrals:
 
     async def test_view_referrals_empty(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.referral_system import view_referrals_handler
+        from apps.telegram_bot.handlers.user.referral_system import view_referrals_handler
 
         await user_factory(telegram_id=700010)
 
@@ -71,7 +71,7 @@ class TestViewReferrals:
         assert isinstance(text, str)
 
     async def test_view_referrals_with_data(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.referral_system import view_referrals_handler
+        from apps.telegram_bot.handlers.user.referral_system import view_referrals_handler
 
         await user_factory(telegram_id=700011)
         await create_user(
@@ -83,7 +83,7 @@ class TestViewReferrals:
 
         call = make_callback_query(data="view_referrals", user_id=700011)
 
-        with patch('bot.handlers.user.referral_system.lazy_paginated_keyboard', new_callable=AsyncMock) as mock_kb:
+        with patch('apps.telegram_bot.handlers.user.referral_system.lazy_paginated_keyboard', new_callable=AsyncMock) as mock_kb:
             mock_kb.return_value = MagicMock()
             await view_referrals_handler(call, fsm_context)
 
@@ -97,7 +97,7 @@ class TestViewReferrals:
 class TestViewAllEarnings:
 
     async def test_view_all_earnings_empty(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.referral_system import view_all_earnings_handler
+        from apps.telegram_bot.handlers.user.referral_system import view_all_earnings_handler
 
         await user_factory(telegram_id=700020)
 
@@ -108,7 +108,7 @@ class TestViewAllEarnings:
         call.message.edit_text.assert_called_once()
 
     async def test_view_all_earnings_with_data(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.referral_system import view_all_earnings_handler
+        from apps.telegram_bot.handlers.user.referral_system import view_all_earnings_handler
 
         await user_factory(telegram_id=700021)
         await create_user(
@@ -126,7 +126,7 @@ class TestViewAllEarnings:
 
         call = make_callback_query(data="view_all_earnings", user_id=700021)
 
-        with patch('bot.handlers.user.referral_system.lazy_paginated_keyboard', new_callable=AsyncMock) as mock_kb:
+        with patch('apps.telegram_bot.handlers.user.referral_system.lazy_paginated_keyboard', new_callable=AsyncMock) as mock_kb:
             mock_kb.return_value = MagicMock()
             await view_all_earnings_handler(call, fsm_context)
 
@@ -152,8 +152,8 @@ class TestEarningDetail:
         )
 
         # Get the earning
-        from bot.database.main import Database
-        from bot.database.models.main import ReferralEarnings
+        from packages.database.engine import Database
+        from packages.database.models.main import ReferralEarnings
         async with Database().session() as s:
             result = await s.execute(
                 select(ReferralEarnings).where(ReferralEarnings.referrer_id == 700030)

@@ -1,0 +1,222 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@400;500;600;700;800;900&family=Rozha+One&family=Yatra+One&display=swap');
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-background: #08070c;
+  --color-foreground: #f8fafc;
+  --color-card: #0f0c16;
+  --color-card-foreground: #f8fafc;
+  --color-popover: #0f0c16;
+  --color-popover-foreground: #f8fafc;
+  --color-primary: #e11d48;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #181224;
+  --color-secondary-foreground: #f8fafc;
+  --color-muted: #1c152a;
+  --color-muted-foreground: #94a3b8;
+  --color-accent: #261a38;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: rgba(225, 29, 72, 0.22);
+  --color-input: rgba(225, 29, 72, 0.25);
+  --color-ring: #e11d48;
+  --radius: 0.85rem;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-vedic: 'Cinzel', 'Yatra One', 'Rozha One', serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  color-scheme: dark;
+  background-image: 
+    radial-gradient(ellipse at 50% -10%, rgba(225, 29, 72, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse at 85% 100%, rgba(153, 27, 27, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 15% 100%, rgba(88, 28, 135, 0.12) 0%, transparent 50%);
+  background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Perfectly Balanced Light Theme ─────────────────────────────────────── */
+.light-theme {
+  --color-background: #faf6f7;
+  --color-foreground: #18111e;
+  --color-card: #ffffff;
+  --color-card-foreground: #18111e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #18111e;
+  --color-muted: #f4eaee;
+  --color-muted-foreground: #64748b;
+  --color-border: #fbcfe8;
+  --color-input: #fbcfe8;
+  --color-secondary: #fdf2f4;
+  --color-secondary-foreground: #18111e;
+  --color-accent: #fce7ec;
+  --color-accent-foreground: #18111e;
+  color-scheme: light;
+}
+
+.light-theme body {
+  background-color: #faf6f7 !important;
+  color: #18111e !important;
+  background-image: 
+    radial-gradient(ellipse at 50% -10%, rgba(225, 29, 72, 0.08) 0%, transparent 65%),
+    radial-gradient(ellipse at 85% 100%, rgba(244, 63, 94, 0.05) 0%, transparent 50%) !important;
+}
+
+.light-theme .glass {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid #fecdd3 !important;
+  backdrop-filter: blur(20px) !important;
+  box-shadow: 0 4px 20px rgba(225, 29, 72, 0.04) !important;
+}
+
+.light-theme .glass-card {
+  background: #ffffff !important;
+  border: 1px solid #fbcfe8 !important;
+  box-shadow: 0 6px 24px rgba(225, 29, 72, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+.light-theme .top-mantra-bar {
+  background: linear-gradient(90deg, #fff1f2 0%, #ffe4e6 50%, #fff1f2 100%) !important;
+  border-bottom: 1px solid #fecdd3 !important;
+}
+.light-theme .top-mantra-bar p {
+  color: #be123c !important;
+}
+
+.light-theme .hero-banner {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 45%, #ffffff 100%) !important;
+  border: 1px solid #fecdd3 !important;
+  box-shadow: 0 10px 30px rgba(225, 29, 72, 0.08) !important;
+}
+
+.light-theme .hero-title {
+  background: linear-gradient(to right, #881337, #be123c, #e11d48) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.light-theme .hero-badge {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  border-color: #fecdd3 !important;
+}
+
+.light-theme .product-card {
+  background: #ffffff !important;
+  border: 1px solid #fcd5dc !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04) !important;
+}
+
+.light-theme .product-card:hover {
+  border-color: #e11d48 !important;
+  box-shadow: 0 12px 30px rgba(225, 29, 72, 0.14) !important;
+}
+
+.light-theme .product-name {
+  color: #0f172a !important;
+}
+
+.light-theme input, 
+.light-theme textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #fbcfe8 !important;
+}
+
+/* ── Dark Glassmorphism Utilities ─────────────────────────────────────── */
+@utility glass {
+  background: rgba(15, 12, 22, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(225, 29, 72, 0.2);
+}
+
+@utility glass-card {
+  background: linear-gradient(145deg, rgba(20, 14, 30, 0.88) 0%, rgba(10, 8, 16, 0.96) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(225, 29, 72, 0.22);
+  box-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(225, 29, 72, 0.25);
+}
+
+@utility glow-kaali {
+  box-shadow: 0 0 35px rgba(225, 29, 72, 0.45);
+}
+
+@utility glow-gold {
+  box-shadow: 0 0 28px rgba(245, 158, 11, 0.35);
+}
+
+@utility font-vedic {
+  font-family: var(--font-vedic);
+}
+
+/* ── Divine Animations ─────────────────────────────────────────────────── */
+@keyframes kaali-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 15px rgba(225, 29, 72, 0.6));
+  }
+  50% {
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 30px rgba(225, 29, 72, 0.95)) drop-shadow(0 0 45px rgba(153, 27, 27, 0.8));
+  }
+}
+
+@keyframes mandala-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ember-glow {
+  0%, 100% { opacity: 0.4; transform: translateY(0px); }
+  50% { opacity: 0.9; transform: translateY(-4px); }
+}
+
+@keyframes trishul-radiance {
+  0%, 100% { filter: drop-shadow(0 0 8px #e11d48); }
+  50% { filter: drop-shadow(0 0 20px #ff1a40) drop-shadow(0 0 30px #f59e0b); }
+}
+
+.animate-kaali-pulse {
+  animation: kaali-pulse 4s ease-in-out infinite;
+}
+
+.animate-mandala-slow {
+  animation: mandala-spin 45s linear infinite;
+}
+
+.animate-ember {
+  animation: ember-glow 3s ease-in-out infinite;
+}
+
+.animate-trishul {
+  animation: trishul-radiance 2.5s ease-in-out infinite;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(225, 29, 72, 0.35); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(225, 29, 72, 0.7); }
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@utility card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}

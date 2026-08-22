@@ -1,8 +1,8 @@
 from sqlalchemy import select
 
-from bot.database.methods.audit import log_audit
-from bot.database.main import Database
-from bot.database.models.main import AuditLog
+from packages.database.methods.audit import log_audit
+from packages.database.engine import Database
+from packages.database.models.main import AuditLog
 
 
 class TestLogAudit:

@@ -3,11 +3,11 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from bot.database.methods.create import (
+from packages.database.methods.create import (
     create_user, create_item, add_values_to_item,
     create_operation, create_pending_payment, create_referral_earning,
 )
-from bot.database.methods.read import (
+from packages.database.methods.read import (
     check_user, check_role, get_role_id_by_name,
     check_role_name_by_id, select_max_role_id,
     select_today_users, get_user_count,
@@ -26,11 +26,11 @@ from bot.database.methods.read import (
     get_all_roles, get_role_by_id, get_roles_with_max_perms,
     count_users_with_role,
 )
-from bot.database.methods.update import (
+from packages.database.methods.update import (
     update_balance, set_role, set_user_blocked,
     is_user_blocked, update_item, update_category,
 )
-from bot.database.methods.delete import (
+from packages.database.methods.delete import (
     delete_item, delete_only_items,
     delete_item_from_position, delete_category,
 )
@@ -268,9 +268,9 @@ class TestItemCRUD:
     async def test_delete_item_from_position(self, item_factory):
         await item_factory(name="PosItem", category="PosCat", values=[("p1", False), ("p2", False)])
         # Get one item value id via async DB session
-        from bot.database import Database as DB
-        from bot.database.models import ItemValues
-        from bot.database.models.main import Goods
+        from packages.database import Database as DB
+        from packages.database.models import ItemValues
+        from packages.database.models.main import Goods
         async with DB().session() as s:
             result = await s.execute(select(Goods).where(Goods.name == "PosItem"))
             pos = result.scalars().first()
@@ -353,8 +353,8 @@ class TestPayments:
         await user_factory(telegram_id=9001)
         await create_pending_payment("cryptopay", "ext_001", 9001, 500, "RUB")
         # Verify via async DB query
-        from bot.database import Database as DB
-        from bot.database.models import Payments
+        from packages.database import Database as DB
+        from packages.database.models import Payments
         async with DB().session() as s:
             result = await s.execute(select(Payments).where(Payments.user_id == 9001))
             p = result.scalars().first()
@@ -369,8 +369,8 @@ class TestPayments:
         await user_factory(telegram_id=9002)
         await create_pending_payment("stars", "ext_010", 9002, 100, "XTR")
         await create_pending_payment("stars", "ext_011", 9002, 200, "XTR")
-        from bot.database import Database as DB
-        from bot.database.models import Payments
+        from packages.database import Database as DB
+        from packages.database.models import Payments
         async with DB().session() as s:
             from sqlalchemy import func
             result = await s.execute(
@@ -415,8 +415,8 @@ class TestReferrals:
         await user_factory(telegram_id=10011, referral_id=10010)
         await create_referral_earning(10010, 10011, 25, 250)
         # Get the earning id via async DB session
-        from bot.database import Database as DB
-        from bot.database.models import ReferralEarnings
+        from packages.database import Database as DB
+        from packages.database.models import ReferralEarnings
         async with DB().session() as s:
             result = await s.execute(
                 select(ReferralEarnings).where(ReferralEarnings.referrer_id == 10010)
@@ -450,8 +450,8 @@ class TestStats:
 
     async def test_select_today_orders_with_bought_goods(self, user_factory):
         await user_factory(telegram_id=11001)
-        from bot.database import Database as DB
-        from bot.database.models import BoughtGoods
+        from packages.database import Database as DB
+        from packages.database.models import BoughtGoods
         async with DB().session() as s:
             s.add(BoughtGoods(
                 name="Sold1", value="val", price=150,
@@ -462,8 +462,8 @@ class TestStats:
 
     async def test_select_all_orders_with_bought_goods(self, user_factory):
         await user_factory(telegram_id=11002)
-        from bot.database import Database as DB
-        from bot.database.models import BoughtGoods
+        from packages.database import Database as DB
+        from packages.database.models import BoughtGoods
         async with DB().session() as s:
             s.add(BoughtGoods(
                 name="SoldA", value="v1", price=100,
@@ -478,8 +478,8 @@ class TestStats:
 
     async def test_select_user_items_count(self, user_factory):
         await user_factory(telegram_id=11003)
-        from bot.database import Database as DB
-        from bot.database.models import BoughtGoods
+        from packages.database import Database as DB
+        from packages.database.models import BoughtGoods
         async with DB().session() as s:
             s.add(BoughtGoods(
                 name="B1", value="v", price=10,

@@ -2,8 +2,8 @@ import time
 
 import pytest
 
-from bot.middleware.security import check_suspicious_patterns, SecurityMiddleware, AuthenticationMiddleware
-from bot.middleware.rate_limit import RateLimiter, RateLimitConfig
+from apps.telegram_bot.middleware.security import check_suspicious_patterns, SecurityMiddleware, AuthenticationMiddleware
+from apps.telegram_bot.middleware.rate_limit import RateLimiter, RateLimitConfig
 
 
 class TestSuspiciousPatterns:
@@ -187,17 +187,17 @@ class TestAuthenticationMiddleware:
 class TestPermissionHasAnyAdminPerm:
 
     def test_use_only_is_not_admin(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(1) is False
 
     def test_admin_perms_is_admin(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(31) is True
 
     def test_single_admin_bit_is_admin(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(2) is True  # BROADCAST only
 
     def test_zero_is_not_admin(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(0) is False

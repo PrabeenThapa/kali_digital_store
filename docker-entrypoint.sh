@@ -48,12 +48,12 @@ chown botuser:botgroup /app/logs/bot.log /app/logs/audit.log
 # Set ownership on app directory itself (but not recursively to avoid slowdown)
 chown botuser:botgroup /app
 
-echo "Permissions configured. Running migrations..."
-
-# Run migrations separately — if they fail, set -e stops the container before bot starts
-gosu botuser alembic upgrade head
-
-echo "Migrations complete. Starting bot..."
-
-# exec gives PID 1 to the Python process — SIGTERM propagates correctly for graceful shutdown
-exec gosu botuser python run.py
+if [ $# -eq 0 ]; then
+    echo "Permissions configured. Running migrations..."
+    gosu botuser alembic upgrade head
+    echo "Migrations complete. Starting bot..."
+    exec gosu botuser python run.py
+else
+    echo "Starting service: $@"
+    exec gosu botuser "$@"
+fi

@@ -15,6 +15,7 @@ venv/
 env/
 ENV/
 .venv
+venv_kalibot/
 
 # IDE
 .vscode/
@@ -53,3 +54,12 @@ data/
 docker-compose*.yml
 Dockerfile*
 .dockerignore
+
+# Dependencies and Build Directories
+**/node_modules/
+**/node_modules
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/build/
+venv_kalibot/

@@ -71,8 +71,13 @@ class FakeFSMContext:
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_database():
-    """Replace Database singleton with async SQLite in-memory engine for all tests."""
-    from bot.database.main import Database
+    """Replace Database singleton with async SQLite temp file for all tests."""
+    import os
+    import tempfile
+    from packages.database.engine import Database
+
+    temp_db_fd, temp_db_path = tempfile.mkstemp(suffix="_test.db")
+    os.close(temp_db_fd)
 
     # Reset singleton
     Database._instance = None
@@ -82,10 +87,9 @@ def setup_test_database():
 
     def test_init(self):
         self.__dict__['_Database__engine'] = create_async_engine(
-            "sqlite+aiosqlite:///:memory:",
+            f"sqlite+aiosqlite:///{temp_db_path}",
             echo=False,
             connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
         )
         self.__dict__['_Database__SessionLocal'] = async_sessionmaker(
             bind=self.__dict__['_Database__engine'],
@@ -101,9 +105,10 @@ def setup_test_database():
     db = Database()
 
     async def _setup():
+        import packages.database.models.main  # Ensure all model tables are registered
         async with db.engine.begin() as conn:
             await conn.run_sync(Database.BASE.metadata.create_all)
-        from bot.database.models.main import Role
+        from packages.database.models.main import Role
         await Role.insert_roles()
 
     asyncio.run(_setup())
@@ -112,6 +117,11 @@ def setup_test_database():
 
     Database.__init__ = original_init
     Database._instance = None
+    if os.path.exists(temp_db_path):
+        try:
+            os.remove(temp_db_path)
+        except Exception:
+            pass
 
 
 @pytest.fixture(autouse=True)
@@ -122,8 +132,8 @@ async def db_cleanup(setup_test_database):
     """
     yield
 
-    from bot.database.main import Database
-    from bot.database.models.main import (
+    from packages.database.engine import Database
+    from packages.database.models.main import (
         ReferralEarnings, BoughtGoods, Operations, Payments,
         ItemValues, Goods, Categories, User, Role
     )
@@ -148,9 +158,9 @@ def fake_cache():
     """Provide a FakeCacheManager and patch get_cache_manager everywhere."""
     cache = FakeCacheManager()
 
-    with patch('bot.misc.caching.cache._cache_manager', cache), \
-            patch('bot.misc.caching.cache.get_cache_manager', return_value=cache), \
-            patch('bot.database.methods.read.get_cache_manager', return_value=cache):
+    with patch('apps.telegram_bot.cache.manager._cache_manager', cache), \
+            patch('apps.telegram_bot.cache.manager.get_cache_manager', return_value=cache), \
+            patch('packages.database.methods.read.get_cache_manager', return_value=cache):
         yield cache
 
 
@@ -165,10 +175,10 @@ def patch_safe_create_task():
         except RuntimeError:
             asyncio.run(coro)
 
-    with patch('bot.database.methods.cache_utils.safe_create_task', side_effect=run_immediately), \
-            patch('bot.database.methods.update.safe_create_task', side_effect=run_immediately), \
-            patch('bot.database.methods.delete.safe_create_task', side_effect=run_immediately), \
-            patch('bot.database.methods.transactions.safe_create_task', side_effect=run_immediately):
+    with patch('packages.database.methods.cache_utils.safe_create_task', side_effect=run_immediately), \
+            patch('packages.database.methods.update.safe_create_task', side_effect=run_immediately), \
+            patch('packages.database.methods.delete.safe_create_task', side_effect=run_immediately), \
+            patch('packages.database.methods.transactions.safe_create_task', side_effect=run_immediately):
         yield
 
 
@@ -190,7 +200,7 @@ def patch_env_keys():
         'RULES': 'Test rules',
     }
 
-    with patch.multiple('bot.misc.env.EnvKeys', **patches):
+    with patch.multiple('packages.config.config.EnvKeys', **patches):
         yield
 
 
@@ -203,24 +213,24 @@ def mock_localize():
             return f"{key}:{kwargs}"
         return key
 
-    with patch('bot.i18n.localize', side_effect=fake_localize) as m, \
-            patch('bot.handlers.user.main.localize', side_effect=fake_localize), \
-            patch('bot.handlers.user.balance_and_payment.localize', side_effect=fake_localize), \
-            patch('bot.handlers.user.shop_and_goods.localize', side_effect=fake_localize), \
-            patch('bot.handlers.user.referral_system.localize', side_effect=fake_localize), \
-            patch('bot.handlers.admin.user_management_states.localize', side_effect=fake_localize), \
-            patch('bot.handlers.admin.categories_management_states.localize', side_effect=fake_localize), \
-            patch('bot.handlers.admin.goods_management_states.localize', side_effect=fake_localize), \
-            patch('bot.handlers.admin.role_management_states.localize', side_effect=fake_localize):
+    with patch('apps.telegram_bot.i18n.localize', side_effect=fake_localize) as m, \
+            patch('apps.telegram_bot.handlers.user.main.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.user.balance_and_payment.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.user.shop_and_goods.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.user.referral_system.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.admin.user_management_states.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.admin.categories_management_states.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.admin.goods_management_states.localize', side_effect=fake_localize), \
+            patch('apps.telegram_bot.handlers.admin.role_management_states.localize', side_effect=fake_localize):
         yield m
 
 
 @pytest.fixture
 def user_factory():
     """Factory to create test users."""
-    from bot.database.methods.create import create_user
-    from bot.database.methods.update import update_balance
-    from bot.database.methods.read import check_user
+    from packages.database.methods.create import create_user
+    from packages.database.methods.update import update_balance
+    from packages.database.methods.read import check_user
 
     async def _create(
             telegram_id: int = 100001,
@@ -244,7 +254,7 @@ def user_factory():
 @pytest.fixture
 def category_factory():
     """Factory to create categories."""
-    from bot.database.methods.create import create_category
+    from packages.database.methods.create import create_category
 
     async def _create(name: str = "TestCategory"):
         await create_category(name)
@@ -255,7 +265,7 @@ def category_factory():
 @pytest.fixture
 def item_factory(category_factory):
     """Factory to create items with optional stock values."""
-    from bot.database.methods.create import create_item, add_values_to_item
+    from packages.database.methods.create import create_item, add_values_to_item
 
     async def _create(
             name: str = "TestItem",
@@ -337,7 +347,7 @@ def fsm_context():
 @pytest.fixture
 def role_factory():
     """Factory to create custom roles."""
-    from bot.database.methods.create import create_role
+    from packages.database.methods.create import create_role
 
     async def _create(name: str = "CUSTOM", permissions: int = 3):
         return await create_role(name, permissions)

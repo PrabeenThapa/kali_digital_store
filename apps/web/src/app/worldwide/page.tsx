@@ -1,0 +1,1024 @@
+"use client";
+
+import { useEffect, useState, useMemo } from 'react';
+import { api } from '@/lib/api';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  Search, CheckCircle2, Copy, Zap, Shield,
+  Wallet, Tag, ArrowRight, X, AlertCircle, RefreshCw, Sparkles,
+  Sun, Moon, Check, PackageCheck, PackageX, LayoutGrid,
+  List, Bolt, Globe, Lock, HeartHandshake, ThumbsUp, Star,
+  MessageSquare, ExternalLink, QrCode, CreditCard
+} from 'lucide-react';
+
+interface Product {
+  id: string;
+  raw_id: number;
+  name: string;
+  description: string;
+  price: number;
+  stock: number;
+  image?: string;
+  type: string;
+  source?: string;
+  category_id?: number;
+  is_instant?: boolean;
+  is_featured?: boolean;
+  rating?: number;
+  reviews_count?: number;
+}
+
+interface UserProfile {
+  id: number;
+  username: string;
+  balance: number;
+}
+
+interface PromoDiscount {
+  code: string;
+  discount_type: string;
+  discount_value: number;
+  discount_amount: number;
+  final_price: number;
+}
+
+interface Review {
+  id: string | number;
+  user_name: string;
+  rating: number;
+  comment: string;
+  created_at: string | null;
+  is_verified?: boolean;
+}
+
+interface CryptoPaymentMethod {
+  id: string;
+  name: string;
+  icon: string;
+  badge: string;
+  speed: string;
+  address?: string;
+  qr_url?: string;
+  bot_url?: string;
+  enabled?: boolean;
+}
+
+const AUTO_CATEGORIES = [
+  { id: 'ai',          label: '🤖 AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
+  { id: 'streaming',   label: '🎬 Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
+  { id: 'creative',    label: '🎨 Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
+  { id: 'productivity',label: '💼 Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
+  { id: 'vpn',         label: '🔒 VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
+  { id: 'dev',         label: '🔧 Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
+  { id: 'email',       label: '📧 Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
+  { id: 'other',       label: '✨ Others',             purchases: '180+ Purchases',   keywords: [] },
+];
+
+function getAutoCategory(productName: string): string {
+  const lower = productName.toLowerCase();
+  for (const cat of AUTO_CATEGORIES) {
+    if (cat.id === 'other') continue;
+    if (cat.keywords.some(k => lower.includes(k))) return cat.id;
+  }
+  return 'other';
+}
+
+function getProductEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('chatgpt') || n.includes('gpt')) return '🤖';
+  if (n.includes('claude')) return '🧠';
+  if (n.includes('gemini')) return '✨';
+  if (n.includes('canva') || n.includes('adobe')) return '🎨';
+  if (n.includes('netflix') || n.includes('spotify') || n.includes('youtube')) return '🎬';
+  if (n.includes('cursor') || n.includes('replit') || n.includes('token')) return '⚡';
+  if (n.includes('office') || n.includes('microsoft') || n.includes('linkedin')) return '💼';
+  if (n.includes('vpn') || n.includes('nord')) return '🔒';
+  if (n.includes('figma')) return '📐';
+  if (n.includes('capcut')) return '✂️';
+  return '💎';
+}
+
+export default function WorldwideStorePage() {
+  const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Checkout modal
+  const [activeModalProduct, setActiveModalProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<PromoDiscount | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [orderError, setOrderError] = useState('');
+  const [deliveredContent, setDeliveredContent] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+
+  // Reviews & Upvotes State
+  const [upvotes, setUpvotes] = useState<Record<string, { count: number; has_upvoted: boolean }>>({});
+  const [reviewModalProduct, setReviewModalProduct] = useState<Product | null>(null);
+  const [reviewsData, setReviewsData] = useState<{ average_rating: number; total_reviews: number; reviews: Review[] }>({
+    average_rating: 5.0,
+    total_reviews: 0,
+    reviews: []
+  });
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Direct Checkout Top-Up State
+  const [isDirectTopUpMode, setIsDirectTopUpMode] = useState(false);
+  const [cryptoMethods, setCryptoMethods] = useState<CryptoPaymentMethod[]>([]);
+  const [selectedCryptoMethod, setSelectedCryptoMethod] = useState<string>('cryptopay');
+  const [directTxId, setDirectTxId] = useState('');
+  const [isProcessingDirectPay, setIsProcessingDirectPay] = useState(false);
+  const [directPaySuccessMsg, setDirectPaySuccessMsg] = useState('');
+  const [copiedCryptoAddress, setCopiedCryptoAddress] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+    if (savedTheme === 'light') document.documentElement.classList.add('light-theme');
+    else document.documentElement.classList.remove('light-theme');
+    setTheme(savedTheme);
+
+    fetchCatalog();
+    fetchUser();
+    fetchCryptoPaymentMethods();
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('theme', next);
+    if (next === 'light') document.documentElement.classList.add('light-theme');
+    else document.documentElement.classList.remove('light-theme');
+  };
+
+  const formatUsd = (usd: number = 0) => `$${usd.toFixed(2)}`;
+
+  const fetchCatalog = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/catalog/products');
+      const prods = res.data || [];
+      setProducts(prods);
+
+      // Fetch upvotes for each product in background
+      prods.forEach(async (p: Product) => {
+        try {
+          const upRes = await api.get(`/catalog/products/${p.id}/upvotes`);
+          setUpvotes(prev => ({
+            ...prev,
+            [p.id]: { count: upRes.data.upvotes_count, has_upvoted: upRes.data.has_upvoted }
+          }));
+        } catch { /* empty */ }
+      });
+    } catch { /* empty */ } finally { setLoading(false); }
+  };
+
+  const fetchUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await api.get('/user/me');
+      if (res.data) setUser(res.data);
+    } catch { /* ignore */ }
+  };
+
+  const fetchCryptoPaymentMethods = async () => {
+    try {
+      const res = await api.get('/payments/crypto-methods');
+      setCryptoMethods(res.data?.methods || []);
+    } catch { /* empty */ }
+  };
+
+  const handleUpvote = async (productId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    try {
+      const res = await api.post(`/catalog/products/${productId}/upvote`);
+      const hasUp = res.data.has_upvoted;
+      setUpvotes(prev => {
+        const current = prev[productId] || { count: 10, has_upvoted: false };
+        return {
+          ...prev,
+          [productId]: {
+            count: hasUp ? current.count + 1 : Math.max(0, current.count - 1),
+            has_upvoted: hasUp
+          }
+        };
+      });
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to upvote.");
+    }
+  };
+
+  const handleOpenReviews = async (p: Product, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setReviewModalProduct(p);
+    setIsLoadingReviews(true);
+    try {
+      const res = await api.get(`/catalog/products/${p.id}/reviews`);
+      setReviewsData(res.data);
+    } catch {
+      setReviewsData({ average_rating: 5.0, total_reviews: 0, reviews: [] });
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewModalProduct || !newComment.trim()) return;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      const res = await api.post(`/catalog/products/${reviewModalProduct.id}/reviews`, {
+        rating: newRating,
+        comment: newComment.trim(),
+      });
+      setReviewsData(prev => ({
+        ...prev,
+        total_reviews: prev.total_reviews + 1,
+        reviews: [res.data.review, ...prev.reviews]
+      }));
+      setNewComment('');
+      alert("Thank you! Your verified review has been published.");
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to submit review.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCat = selectedCategory === 'all' || getAutoCategory(p.name) === selectedCategory;
+      const matchStock =
+        stockFilter === 'all' ? true :
+        stockFilter === 'in_stock' ? p.stock > 0 :
+        p.stock === 0;
+      return matchSearch && matchCat && matchStock;
+    });
+  }, [products, searchTerm, selectedCategory, stockFilter]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: products.length };
+    for (const p of products) {
+      const cat = getAutoCategory(p.name);
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [products]);
+
+  const handleOpenBuyModal = (p: Product) => {
+    setActiveModalProduct(p);
+    setQuantity(1);
+    setPromoCodeInput('');
+    setAppliedPromo(null);
+    setPromoError('');
+    setOrderError('');
+    setIsDirectTopUpMode(false);
+    setDirectTxId('');
+    setDirectPaySuccessMsg('');
+  };
+
+  const getSubtotal = () => (activeModalProduct?.price ?? 0) * quantity;
+  const getFinalTotal = () => {
+    const sub = getSubtotal();
+    if (!appliedPromo) return sub;
+    return Math.max(0, sub - appliedPromo.discount_amount);
+  };
+
+  const handleValidatePromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    setIsValidatingPromo(true);
+    setPromoError('');
+    try {
+      const res = await api.post('/catalog/promocode/validate', {
+        code: promoCodeInput.trim().toUpperCase(),
+        amount: getSubtotal(),
+        product_id: activeModalProduct?.id,
+      });
+      setAppliedPromo(res.data);
+    } catch (err: any) {
+      setAppliedPromo(null);
+      setPromoError(err.response?.data?.detail || "Invalid promocode");
+    } finally { setIsValidatingPromo(false); }
+  };
+
+  const handleCheckout = async () => {
+    if (!activeModalProduct) return;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    const finalCost = getFinalTotal();
+    if (user && user.balance < finalCost) {
+      setIsDirectTopUpMode(true);
+      setOrderError(`Insufficient balance ($${user.balance.toFixed(2)}). Select a direct deposit method below to complete your purchase.`);
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    setOrderError('');
+    try {
+      const res = await api.post('/payments/purchase', {
+        product_id: activeModalProduct.id,
+        quantity,
+        promocode: appliedPromo ? appliedPromo.code : null,
+      });
+      setDeliveredContent(res.data.delivered_content || res.data.message || "Order successful! Credentials sent to dashboard.");
+      setActiveModalProduct(null);
+      fetchUser();
+      fetchCatalog();
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || "Order failed. Please try again.";
+      setOrderError(detail);
+      if (detail.toLowerCase().includes('balance')) {
+        setIsDirectTopUpMode(true);
+      }
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleDirectCryptoDeposit = async () => {
+    const neededAmount = Math.max(1, getFinalTotal() - (user?.balance || 0));
+    setIsProcessingDirectPay(true);
+    try {
+      if (selectedCryptoMethod === 'cryptopay') {
+        const res = await api.post('/payments/deposit/cryptopay-init', {
+          amount_usd: neededAmount
+        });
+        if (res.data.bot_pay_url) {
+          window.open(res.data.bot_pay_url, '_blank');
+          setDirectPaySuccessMsg("Opened CryptoPay invoice! Please complete payment in Telegram/Browser. Polling for confirmation...");
+          
+          // Poll for payment
+          const checkInterval = setInterval(async () => {
+            try {
+              const chk = await api.post('/payments/deposit/cryptopay-check', {
+                invoice_id: res.data.invoice_id
+              });
+              if (chk.data.status === 'paid') {
+                clearInterval(checkInterval);
+                setDirectPaySuccessMsg("Payment Confirmed! Processing your order now...");
+                await fetchUser();
+                setTimeout(() => handleCheckout(), 1000);
+              }
+            } catch { /* empty */ }
+          }, 3000);
+          setTimeout(() => clearInterval(checkInterval), 60000);
+        }
+      } else {
+        if (!directTxId.trim()) {
+          alert("Please enter the Transaction Hash / TxID after transferring funds.");
+          setIsProcessingDirectPay(false);
+          return;
+        }
+        await api.post('/payments/deposit/crypto-proof', {
+          amount: neededAmount,
+          currency: 'USDT',
+          chain: selectedCryptoMethod.toUpperCase(),
+          tx_hash: directTxId.trim(),
+        });
+        setDirectPaySuccessMsg("Deposit submission received! Admin & Bot relay are verifying your transaction.");
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Deposit submission failed.");
+    } finally {
+      setIsProcessingDirectPay(false);
+    }
+  };
+
+  const selectedMethodObj = cryptoMethods.find(m => m.id === selectedCryptoMethod) || cryptoMethods[0];
+  const inStockCount = useMemo(() => products.filter(p => p.stock > 0).length, [products]);
+  const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-red-600 selection:text-white">
+      {/* Top Sacred Mantra Bar */}
+      <div className="top-mantra-bar w-full bg-gradient-to-r from-red-950/80 via-red-900/40 to-red-950/80 border-b border-red-500/20 py-1.5 px-4 text-center">
+        <p className="text-[10px] font-bold text-red-400 tracking-widest font-vedic uppercase flex items-center justify-center gap-2">
+          <span>🔱</span>
+          <span>॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥</span>
+          <span>🔱</span>
+        </p>
+      </div>
+
+      {/* Header */}
+      <header className="sticky top-0 z-40 w-full glass border-b border-red-500/20 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="relative w-10 h-10 rounded-full p-0.5 bg-gradient-to-br from-red-500 to-rose-600 shadow-md shadow-red-500/40 overflow-hidden shrink-0 animate-kaali-pulse">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="Kali Digital Store" className="w-full h-full object-cover rounded-full" />
+              </div>
+              <div>
+                <span className="font-black text-sm tracking-tight flex items-center gap-1.5 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
+                  KALI DIGITAL STORE
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 font-bold">
+                    GLOBAL
+                  </span>
+                </span>
+                <span className="text-[10px] text-muted-foreground block -mt-0.5 font-semibold">
+                  ⚡ INSTANT DISPATCH • USD ($)
+                </span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="flex-1 max-w-md hidden md:block">
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search AI, streaming, accounts, licenses..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full bg-secondary/50 border border-red-500/30 rounded-full pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-red-500 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/nepal"
+              className="hidden sm:flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-all shadow-sm"
+            >
+              <span>🇳🇵</span> Nepal Store (NPR)
+            </Link>
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl bg-secondary/60 hover:bg-secondary border border-red-500/20 transition-colors"
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
+            </button>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-bold transition-all shadow-sm"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                <span>{formatUsd(user.balance)}</span>
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-md shadow-red-600/30 transition-all"
+              >
+                Sign In
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full">
+        {/* Vedic Hero Banner */}
+        <div className="hero-banner relative rounded-3xl overflow-hidden p-6 sm:p-10 mb-8 border border-red-500/30 bg-gradient-to-r from-red-950/60 via-red-900/30 to-background shadow-[0_0_50px_rgba(225,29,72,0.15)]">
+          <div className="max-w-2xl">
+            <span className="hero-badge text-[10px] font-black uppercase tracking-widest text-red-400 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 inline-block mb-3">
+              🔱 दिव्य गति एवं अचूक सुरक्षा • 100% Automated Instant Delivery
+            </span>
+            <h1 className="hero-title text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-2 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
+              KALI DIGITAL STORE
+            </h1>
+            <p className="hero-desc text-xs sm:text-sm text-muted-foreground leading-relaxed font-medium">
+              Genuine ChatGPT Plus, Claude, Gemini, Canva Pro, JetBrains, VPNs, and Dev API tokens with instant cryptographic delivery and eternal warranty.
+            </p>
+          </div>
+        </div>
+
+        {/* Categories Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-6 no-scrollbar">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+              selectedCategory === 'all'
+                ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+            }`}
+          >
+            🔥 All Items ({products.length})
+          </button>
+          {AUTO_CATEGORIES.map(cat => {
+            const count = categoryCounts[cat.id] || 0;
+            if (count === 0) return null;
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                    : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }`}
+              >
+                <span>{cat.label} ({count})</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}>
+                  {cat.purchases}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filters row */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-full text-xs font-bold">
+            <button
+              onClick={() => setStockFilter('all')}
+              className={`px-3 py-1.5 rounded-full transition-all ${stockFilter === 'all' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+            >All</button>
+            <button
+              onClick={() => setStockFilter('in_stock')}
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${stockFilter === 'in_stock' ? 'bg-emerald-500 text-white' : 'text-emerald-500 hover:bg-emerald-500/10'}`}
+            >
+              <PackageCheck className="w-3 h-3" /> In Stock ({inStockCount})
+            </button>
+            <button
+              onClick={() => setStockFilter('out_of_stock')}
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${stockFilter === 'out_of_stock' ? 'bg-rose-500 text-white' : 'text-rose-400 hover:bg-rose-500/10'}`}
+            >
+              <PackageX className="w-3 h-3" /> Out of Stock ({outOfStockCount})
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground font-medium">{filteredProducts.length} items available in USD</span>
+            <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-lg">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              ><LayoutGrid className="w-3.5 h-3.5" /></button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              ><List className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        </div>
+
+        {/* Product Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="glass-card rounded-2xl animate-pulse h-72" />
+            ))}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-center py-24 glass-card rounded-3xl">
+            <div className="text-5xl mb-4">🔍</div>
+            <h3 className="text-lg font-bold text-foreground mb-2">No Products Found</h3>
+            <p className="text-muted-foreground text-sm">Try adjusting your search or category filter.</p>
+            <button
+              onClick={() => { setSearchTerm(''); setSelectedCategory('all'); setStockFilter('all'); }}
+              className="mt-6 px-6 py-2.5 rounded-full text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
+            >Clear Filters</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {filteredProducts.map(product => {
+              const productUpvotes = upvotes[product.id] || { count: 18, has_upvoted: false };
+              return (
+                <div
+                  key={product.id}
+                  className="glass-card rounded-2xl overflow-hidden flex flex-col group hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.2)] transition-all duration-300 cursor-pointer relative justify-between"
+                  onClick={() => handleOpenBuyModal(product)}
+                >
+                  <div className="relative p-6 pb-4 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
+                      {getProductEmoji(product.name)}
+                    </div>
+                    
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => handleUpvote(product.id, e)}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition-all border ${
+                          productUpvotes.has_upvoted
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-secondary/80 text-muted-foreground hover:text-foreground border-border/60 hover:bg-secondary'
+                        }`}
+                        title="Upvote item"
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                        <span>{productUpvotes.count}</span>
+                      </button>
+                    </div>
+
+                    <div className="absolute top-3 left-3 flex items-center gap-1">
+                      {product.is_featured && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          ⭐ Featured
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${product.is_instant ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'bg-blue-500/15 text-blue-400 border border-blue-500/25'}`}>
+                        {product.is_instant ? '⚡ Instant' : '📋 Manual'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-extrabold text-sm text-foreground line-clamp-2 mt-4 mb-1 group-hover:text-primary transition-colors">
+                      {product.name}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground line-clamp-2 mb-3">
+                      {product.description}
+                    </p>
+
+                    {/* Review and Social proof trigger */}
+                    <div 
+                      onClick={(e) => handleOpenReviews(product, e)}
+                      className="flex items-center gap-1.5 text-[10px] text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-2 py-0.5 rounded-full transition-all"
+                    >
+                      <div className="flex text-amber-300">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`w-2.5 h-2.5 ${i < Math.floor(product.rating || 5) ? 'fill-amber-300 text-amber-300' : 'text-amber-300/30'}`} />
+                        ))}
+                      </div>
+                      <span className="font-bold">{product.rating || 4.8} ({product.reviews_count || 24})</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 pt-3 border-t border-border/40 bg-secondary/20 flex items-center justify-between gap-3 mt-auto">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Global Price</span>
+                      <span className="text-base font-black text-primary">{formatUsd(product.price)}</span>
+                    </div>
+                    {product.stock === 0 ? (
+                      <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30">
+                        Out of Stock
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenBuyModal(product)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 flex items-center gap-1.5 transition-all"
+                      >
+                        <Bolt className="w-3.5 h-3.5" /> Buy Now
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      {/* ─── Worldwide Checkout & Direct Deposit Modal ───────────────────────── */}
+      {activeModalProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="glass-card w-full max-w-lg rounded-3xl p-6 relative border border-primary/30 shadow-[0_0_60px_rgba(0,0,0,0.8)] max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setActiveModalProduct(null)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+            ><X className="w-4 h-4" /></button>
+
+            {/* Product header */}
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-14 h-14 rounded-2xl border border-primary/30 bg-primary/20 flex items-center justify-center text-3xl flex-shrink-0">
+                {getProductEmoji(activeModalProduct.name)}
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1">
+                  🌐 Global Order Checkout
+                </div>
+                <h2 className="text-base font-bold leading-snug">{activeModalProduct.name}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{activeModalProduct.description}</p>
+              </div>
+            </div>
+
+            {/* Quantity */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/40 border border-border/50 mb-4">
+              <span className="text-xs font-semibold text-muted-foreground">Quantity</span>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="w-8 h-8 rounded-lg bg-secondary border border-border text-foreground font-bold flex items-center justify-center hover:bg-accent">−</button>
+                <span className="text-sm font-bold w-6 text-center">{quantity}</span>
+                <button onClick={() => setQuantity(Math.min(activeModalProduct.stock || 99, quantity + 1))}
+                  className="w-8 h-8 rounded-lg bg-secondary border border-border text-foreground font-bold flex items-center justify-center hover:bg-accent">+</button>
+              </div>
+            </div>
+
+            {/* Promocode */}
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Promocode (optional)</label>
+              <div className="flex gap-2">
+                <div className="relative flex-grow">
+                  <Tag className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input type="text" placeholder="e.g. SAVE20"
+                    value={promoCodeInput}
+                    onChange={e => setPromoCodeInput(e.target.value.toUpperCase())}
+                    className="w-full bg-secondary/40 border border-border/60 rounded-xl pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:border-primary transition-all" />
+                </div>
+                <button onClick={handleValidatePromo} disabled={isValidatingPromo || !promoCodeInput.trim()}
+                  className="px-4 py-2 bg-secondary text-secondary-foreground text-xs font-bold rounded-xl hover:bg-secondary/80 disabled:opacity-50">
+                  {isValidatingPromo ? '...' : 'Apply'}
+                </button>
+              </div>
+              {appliedPromo && (
+                <div className="mt-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-400 font-medium">
+                  <span>✓ Code <b>{appliedPromo.code}</b> applied!</span>
+                  <span>−{formatUsd(appliedPromo.discount_amount)}</span>
+                </div>
+              )}
+              {promoError && <p className="text-[11px] text-rose-400 mt-1">{promoError}</p>}
+            </div>
+
+            {/* Payment Method Selector & Toggle */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Payment Method</label>
+                <button 
+                  onClick={() => setIsDirectTopUpMode(!isDirectTopUpMode)}
+                  className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  {isDirectTopUpMode ? '← Use Wallet Balance' : '⚡ Direct Crypto Deposit'}
+                </button>
+              </div>
+
+              {!isDirectTopUpMode ? (
+                <div className="p-3.5 rounded-xl border bg-primary/15 border-primary text-primary">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-foreground text-xs">💰 USD Wallet Balance</span>
+                    <span className="text-xs font-bold text-primary">{user ? formatUsd(user.balance) : '$0.00'}</span>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground block mt-0.5">
+                    {user && user.balance >= getFinalTotal() 
+                      ? '✓ Sufficient balance for 1-click instant delivery' 
+                      : `⚠️ Needs +${formatUsd(Math.max(0, getFinalTotal() - (user?.balance || 0)))} — Top up below to complete.`}
+                  </span>
+                </div>
+              ) : (
+                /* DIRECT DEPOSIT TILES */
+                <div className="space-y-3 p-4 rounded-2xl bg-secondary/40 border border-primary/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" /> Direct Top-Up Needed: {formatUsd(Math.max(1, getFinalTotal() - (user?.balance || 0)))}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      Zero Fees
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {cryptoMethods.map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedCryptoMethod(m.id)}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          selectedCryptoMethod === m.id
+                            ? 'bg-primary/20 border-primary text-foreground font-bold shadow-sm'
+                            : 'bg-secondary/40 border-border/60 text-muted-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-foreground">{m.name}</div>
+                        <div className="text-[10px] text-muted-foreground">{m.speed}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedMethodObj?.address && (
+                    <div className="p-3 rounded-xl bg-background/60 border border-border/80 text-xs">
+                      <div className="text-[10px] text-muted-foreground mb-1">Transfer Address ({selectedMethodObj.name}):</div>
+                      <div className="font-mono text-[11px] text-primary break-all bg-black/40 p-2 rounded-lg flex items-center justify-between gap-2">
+                        <span>{selectedMethodObj.address}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedMethodObj.address || '');
+                            setCopiedCryptoAddress(true);
+                            setTimeout(() => setCopiedCryptoAddress(false), 2000);
+                          }}
+                          className="px-2 py-1 bg-primary/20 text-primary rounded hover:bg-primary/30 text-[10px] font-bold flex-shrink-0"
+                        >
+                          {copiedCryptoAddress ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+
+                      <div className="mt-2.5">
+                        <label className="text-[10px] text-muted-foreground block mb-1">Transaction Hash / TxID:</label>
+                        <input
+                          type="text"
+                          placeholder="Paste blockchain TxID / Hash here..."
+                          value={directTxId}
+                          onChange={e => setDirectTxId(e.target.value)}
+                          className="w-full bg-secondary/60 border border-border/60 rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {directPaySuccessMsg && (
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-400 font-medium">
+                      {directPaySuccessMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleDirectCryptoDeposit}
+                    disabled={isProcessingDirectPay}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {isProcessingDirectPay ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
+                    {selectedCryptoMethod === 'cryptopay' ? 'Open CryptoPay & Auto-Verify' : 'Submit Proof & Credit Order'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Price breakdown */}
+            <div className="p-4 rounded-xl bg-secondary/30 border border-border/40 mb-4 space-y-2 text-xs">
+              <div className="flex justify-between text-muted-foreground"><span>Unit Price</span><span>{formatUsd(activeModalProduct.price)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal ({quantity}×)</span><span>{formatUsd(getSubtotal())}</span></div>
+              {appliedPromo && (
+                <div className="flex justify-between text-emerald-400 font-semibold"><span>Promocode Discount</span><span>−{formatUsd(appliedPromo.discount_amount)}</span></div>
+              )}
+              <div className="pt-2 border-t border-border/40 flex justify-between items-center text-sm font-extrabold">
+                <span>Total Amount (USD)</span>
+                <span className="text-lg font-black text-primary">{formatUsd(getFinalTotal())}</span>
+              </div>
+            </div>
+
+            {orderError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" /><span>{orderError}</span>
+              </div>
+            )}
+
+            <button
+              onClick={handleCheckout}
+              disabled={isSubmittingOrder}
+              className="w-full py-3.5 font-extrabold text-sm rounded-xl text-white bg-primary hover:bg-primary/90 shadow-primary/30 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg"
+            >
+              {isSubmittingOrder ? <><RefreshCw className="w-4 h-4 animate-spin" /> Processing Order...</>
+                : <>Confirm & Complete Purchase {formatUsd(getFinalTotal())} <ArrowRight className="w-4 h-4" /></>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reviews & Ratings Modal ────────────────────────────────────────── */}
+      {reviewModalProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="glass-card w-full max-w-lg rounded-3xl p-6 relative border border-primary/30 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <button
+              onClick={() => setReviewModalProduct(null)}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+            ><X className="w-4 h-4" /></button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-2xl">
+                {getProductEmoji(reviewModalProduct.name)}
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-foreground leading-tight">{reviewModalProduct.name}</h3>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="flex text-amber-300">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-foreground">{reviewsData.average_rating} ({reviewsData.total_reviews} reviews)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Add Review Form */}
+            <form onSubmit={handleSubmitReview} className="mb-6 p-4 rounded-2xl bg-secondary/40 border border-border/60">
+              <h4 className="text-xs font-extrabold text-foreground mb-2 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-primary" /> Leave Your Verified Review
+              </h4>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs text-muted-foreground">Rating:</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setNewRating(star)}
+                      className="p-1 text-amber-300 hover:scale-125 transition-transform"
+                    >
+                      <Star className={`w-4 h-4 ${star <= newRating ? 'fill-amber-300' : 'text-muted-foreground'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <textarea
+                placeholder="Share your experience with this item (activation speed, warranty, quality)..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                rows={3}
+                className="w-full bg-background border border-border/80 rounded-xl p-3 text-xs focus:outline-none focus:border-primary transition-all resize-none mb-3"
+              />
+
+              <button
+                type="submit"
+                disabled={isSubmittingReview || !newComment.trim()}
+                className="w-full py-2 bg-primary hover:bg-primary/90 text-white font-extrabold text-xs rounded-xl shadow transition-all disabled:opacity-50"
+              >
+                {isSubmittingReview ? "Publishing..." : "Submit Review ⭐"}
+              </button>
+            </form>
+
+            {/* Reviews List */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Customer Feedback</h4>
+              {isLoadingReviews ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">Loading reviews...</p>
+              ) : reviewsData.reviews.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No reviews yet. Be the first to leave feedback!</p>
+              ) : (
+                reviewsData.reviews.map(r => (
+                  <div key={r.id} className="p-3.5 rounded-xl bg-secondary/30 border border-border/40">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-foreground">{r.user_name}</span>
+                        {r.is_verified && (
+                          <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                            ✓ Verified Buyer
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex text-amber-300">
+                        {[...Array(r.rating)].map((_, i) => (
+                          <Star key={i} className="w-2.5 h-2.5 fill-amber-300" />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{r.comment}</p>
+                    {r.created_at && (
+                      <span className="text-[9px] text-muted-foreground/60 block mt-1">
+                        {new Date(r.created_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Modal */}
+      {deliveredContent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="glass-card w-full max-w-lg rounded-3xl p-6 border border-emerald-500/30 shadow-[0_0_60px_rgba(34,197,94,0.2)]">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+            </div>
+            <h2 className="text-xl font-bold text-center mb-1">Order Processed! 🎉</h2>
+            <p className="text-xs text-muted-foreground text-center mb-5">Your digital credentials have been generated.</p>
+            <div className="relative mb-5">
+              <pre className="w-full p-4 rounded-2xl bg-black/60 border border-border/80 text-xs font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap max-h-52">
+                {deliveredContent}
+              </pre>
+              <button
+                onClick={() => { navigator.clipboard.writeText(deliveredContent); setCopied(true); setTimeout(() => setCopied(false), 2500); }}
+                className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold flex items-center gap-1.5"
+              >
+                {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Details</>}
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <Link href="/dashboard" className="flex-1 py-3 text-center bg-secondary border border-border hover:bg-accent text-xs font-bold rounded-xl transition-colors">
+                View Account Orders
+              </Link>
+              <button onClick={() => setDeliveredContent(null)}
+                className="flex-1 py-3 text-white text-xs font-extrabold rounded-xl transition-all shadow-md bg-primary hover:bg-primary/90 shadow-primary/30">
+                Continue Shopping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

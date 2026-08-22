@@ -1,5 +1,5 @@
 import pytest
-from bot.misc.lazy_paginator import LazyPaginator
+from apps.telegram_bot.utils.paginator import LazyPaginator
 
 
 async def _mock_query(offset=0, limit=10, count_only=False):

@@ -10,9 +10,9 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-import bot.database.models.main  # noqa: F401
-from bot.database.main import Database
-from bot.database.dsn import dsn
+import packages.database.models.main  # noqa: F401
+from packages.database.engine import Database
+from packages.database.dsn import dsn
 
 config = context.config
 if config.config_file_name:

@@ -2,7 +2,7 @@ import pytest
 import math
 from unittest.mock import patch, AsyncMock, MagicMock
 
-from bot.misc.services.payment import (
+from packages.services.payment import (
     currency_to_stars,
     _minor_units_for,
     CryptoPayAPI,
@@ -13,33 +13,33 @@ from bot.misc.services.payment import (
 class TestCurrencyToStars:
 
     def test_basic_conversion(self):
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.91
             result = currency_to_stars(100)
         assert result == math.ceil(100 * 0.91)
         assert result == 91
 
     def test_rounds_up(self):
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.33
             result = currency_to_stars(10)
         # 10 * 0.33 = 3.3 -> ceil = 4
         assert result == 4
 
     def test_zero_amount(self):
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.91
             result = currency_to_stars(0)
         assert result == 0
 
     def test_large_amount(self):
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.91
             result = currency_to_stars(100000)
         assert result == math.ceil(100000 * 0.91)
 
     def test_exact_integer_result(self):
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 1.0
             result = currency_to_stars(50)
         assert result == 50
@@ -71,11 +71,11 @@ class TestSendStarsInvoice:
 
     @pytest.mark.asyncio
     async def test_sends_correct_invoice(self):
-        from bot.misc.services.payment import send_stars_invoice
+        from packages.services.payment import send_stars_invoice
 
         bot = AsyncMock()
 
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.91
             env.PAY_CURRENCY = "RUB"
             await send_stars_invoice(bot, chat_id=123, amount=100)
@@ -88,11 +88,11 @@ class TestSendStarsInvoice:
 
     @pytest.mark.asyncio
     async def test_stars_price_amount(self):
-        from bot.misc.services.payment import send_stars_invoice
+        from packages.services.payment import send_stars_invoice
 
         bot = AsyncMock()
 
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.STARS_PER_VALUE = 0.91
             env.PAY_CURRENCY = "RUB"
             await send_stars_invoice(bot, chat_id=123, amount=100)
@@ -105,11 +105,11 @@ class TestSendFiatInvoice:
 
     @pytest.mark.asyncio
     async def test_sends_correct_invoice(self):
-        from bot.misc.services.payment import send_fiat_invoice
+        from packages.services.payment import send_fiat_invoice
 
         bot = AsyncMock()
 
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.TELEGRAM_PROVIDER_TOKEN = "test_token"
             env.PAY_CURRENCY = "RUB"
             await send_fiat_invoice(bot=bot, chat_id=456, amount=200)
@@ -123,11 +123,11 @@ class TestSendFiatInvoice:
 
     @pytest.mark.asyncio
     async def test_zero_decimal_currency(self):
-        from bot.misc.services.payment import send_fiat_invoice
+        from packages.services.payment import send_fiat_invoice
 
         bot = AsyncMock()
 
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.TELEGRAM_PROVIDER_TOKEN = "test_token"
             env.PAY_CURRENCY = "JPY"
             await send_fiat_invoice(bot=bot, chat_id=456, amount=200)
@@ -138,11 +138,11 @@ class TestSendFiatInvoice:
 
     @pytest.mark.asyncio
     async def test_missing_provider_token_raises(self):
-        from bot.misc.services.payment import send_fiat_invoice
+        from packages.services.payment import send_fiat_invoice
 
         bot = AsyncMock()
 
-        with patch('bot.misc.services.payment.EnvKeys') as env:
+        with patch('packages.services.payment.EnvKeys') as env:
             env.TELEGRAM_PROVIDER_TOKEN = ""
             with pytest.raises(RuntimeError, match="TELEGRAM_PROVIDER_TOKEN"):
                 await send_fiat_invoice(bot=bot, chat_id=456, amount=200)
@@ -178,3 +178,63 @@ class TestCryptoPayAPI:
         err = CryptoPayAPIError(code=401, name="UNAUTHORIZED")
         assert "401" in str(err)
         assert "UNAUTHORIZED" in str(err)
+
+
+class TestBybitDepositTimepoint:
+
+    @pytest.mark.asyncio
+    async def test_find_internal_deposit_rejects_old_timestamp(self):
+        from packages.services.bybit import BybitPayAPI
+
+        api = BybitPayAPI()
+        mock_deposits = [
+            {
+                "id": "1001",
+                "txID": "BYBIT_TX_OLD",
+                "orderId": "ORD_123",
+                "amount": "10.0",
+                "status": "2",
+                "createdTime": 1700000000000,  # Old timestamp
+            }
+        ]
+
+        with patch.object(api, "get_internal_deposits", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_deposits
+
+            # Looking for deposit after 1700000500000 (later than createdTime)
+            result = await api.find_internal_deposit_by_txid(
+                tx_id="BYBIT_TX_OLD",
+                coin="USDT",
+                since_timestamp_ms=1700000500000,
+            )
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_find_internal_deposit_accepts_valid_timestamp(self):
+        from packages.services.bybit import BybitPayAPI
+
+        api = BybitPayAPI()
+        mock_deposits = [
+            {
+                "id": "1002",
+                "txID": "BYBIT_TX_NEW",
+                "orderId": "ORD_456",
+                "amount": "25.0",
+                "status": "2",
+                "createdTime": 1700001000000,  # New timestamp
+            }
+        ]
+
+        with patch.object(api, "get_internal_deposits", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_deposits
+
+            # Looking for deposit after 1700000500000 (earlier than createdTime)
+            result = await api.find_internal_deposit_by_txid(
+                tx_id="BYBIT_TX_NEW",
+                coin="USDT",
+                since_timestamp_ms=1700000500000,
+            )
+            assert result is not None
+            assert result["txID"] == "BYBIT_TX_NEW"
+            assert result["amount"] == "25.0"
+

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aiogram.exceptions import TelegramForbiddenError
 
-from bot.misc.services.broadcast_system import BroadcastManager, BroadcastStats
+from packages.services.broadcast import BroadcastManager, BroadcastStats
 
 
 class TestBroadcastStats:

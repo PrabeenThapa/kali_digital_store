@@ -2,10 +2,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import select
 
-from bot.misc.services.recovery import RecoveryManager
-from bot.database.methods.create import create_pending_payment
-from bot.database.main import Database
-from bot.database.models.main import Payments
+from packages.services.recovery import RecoveryManager
+from packages.database.methods.create import create_pending_payment
+from packages.database.engine import Database
+from packages.database.models.main import Payments
 
 
 class TestRecoveryManager:
@@ -35,7 +35,7 @@ class TestRecoveryManager:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(return_value={"status": "paid"})
 
-        with patch('bot.misc.services.payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('packages.services.payment.CryptoPayAPI', return_value=mock_crypto):
             await self.manager._check_and_process_payment(payment_copy)
 
         # Verify payment processed
@@ -62,7 +62,7 @@ class TestRecoveryManager:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(return_value={"status": "expired"})
 
-        with patch('bot.misc.services.payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('packages.services.payment.CryptoPayAPI', return_value=mock_crypto):
             await self.manager._check_and_process_payment(payment_copy)
 
         # Should be marked as failed
@@ -109,7 +109,7 @@ class TestRecoveryManager:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(side_effect=Exception("Connection timeout"))
 
-        with patch('bot.misc.services.payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('packages.services.payment.CryptoPayAPI', return_value=mock_crypto):
             # Should not raise
             await self.manager._check_and_process_payment(payment_copy)
 
@@ -138,7 +138,7 @@ class TestRecoveryManager:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(return_value={"status": "active"})
 
-        with patch('bot.misc.services.payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('packages.services.payment.CryptoPayAPI', return_value=mock_crypto):
             await self.manager._check_and_process_payment(payment_copy)
 
         async with Database().session() as s:

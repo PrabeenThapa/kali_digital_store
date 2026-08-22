@@ -143,3 +143,11 @@ cython_debug/
 .ruff_cache
 
 data
+*.tar.gz
+*.zip
+*.pdf
+board_preview.png
+emoji_grid.png
+scratch/
+.env*
+!.env.example

@@ -2,6 +2,8 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -10,13 +12,13 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
-    profiles:
-      - redis
 
   db:
     image: postgres:16
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,6 +26,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   bot:
     build: .
@@ -31,23 +34,40 @@ services:
       - .env
     environment:
       POSTGRES_HOST: db
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${DB_PORT}/${POSTGRES_DB}
+      DATABASE_URL: postgresql+asyncpg://shop_user:KaliShop_Secure_2026@db:5432/telegram_shop
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
       ADMIN_HOST: 0.0.0.0
       ADMIN_PORT: 9090
+      BYBIT_UID: ${BYBIT_UID}
+      BYBIT_CHAIN: ${BYBIT_CHAIN:-TRX}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
+      SUPPORT_GROUP_ID: ${SUPPORT_GROUP_ID}
+      SAFWAN_API_KEY: ${SAFWAN_API_KEY:-stapi_25619395b079ce043546e72b5929a9652b6bae80007e6714cbe0cfec7eff89a3}
+      SAFWAN_BASE_URL: ${SAFWAN_BASE_URL:-https://safwantigershopbot-production.up.railway.app/api}
+      CANBOSO_API_KEY: ${CANBOSO_API_KEY:-tgb_286aee3c314ed61da656aab4a5267901916f7e9d48fdf70e}
+      CANBOSO_BASE_URL: ${CANBOSO_BASE_URL:-https://canboso.com/api/v2/telegram-buyer}
+      GGSOMA_API_KEY: ${GGSOMA_API_KEY:-sk_live_237f47e759584bd9ed9dce88c800c3adf102d886d7a7ae2ea5db2083d5d08190}
+      GGSOMA_BASE_URL: ${GGSOMA_BASE_URL:-https://ggsoma.store/api/partner/v1}
       # Linux permissions: Set PUID/PGID to match your host user (run 'id' to find values)
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
+      - .:/app
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9090/health" ]
@@ -56,6 +76,75 @@ services:
       retries: 3
       start_period: 40s
 
+  notify:
+    build: .
+    command: python -m notify_bot
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://shop_user:KaliShop_Secure_2026@db:5432/telegram_shop
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
+      BYBIT_UID: ${BYBIT_UID}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: python run_api.py
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://shop_user:KaliShop_Secure_2026@db:5432/telegram_shop
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      BYBIT_UID: ${BYBIT_UID}
+      BYBIT_CHAIN: ${BYBIT_CHAIN:-TRX}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
 volumes:
   db_data:
   redis_data:
+

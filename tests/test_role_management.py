@@ -1,13 +1,13 @@
 from unittest.mock import patch, AsyncMock
 
-from bot.database.methods.read import (
+from packages.database.methods.read import (
     get_all_roles, get_role_by_id, get_roles_with_max_perms,
     count_users_with_role, select_max_role_id, check_user,
     get_role_id_by_name,
 )
-from bot.database.methods.create import create_role
-from bot.database.methods.update import update_role
-from bot.database.methods.delete import delete_role
+from packages.database.methods.create import create_role
+from packages.database.methods.update import update_role
+from packages.database.methods.delete import delete_role
 
 
 class TestRoleCRUDMethods:
@@ -149,11 +149,11 @@ class TestRoleCRUDMethods:
 class TestRoleManagementHandlers:
 
     async def test_role_list_handler(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import role_management_handler
+        from apps.telegram_bot.handlers.admin.role_management_states import role_management_handler
 
         call = make_callback_query(data="role_mgmt", user_id=900100)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await role_management_handler(call, fsm_context)
 
@@ -162,12 +162,12 @@ class TestRoleManagementHandlers:
         assert "admin.roles.list_title" in text
 
     async def test_role_view_handler(self, make_callback_query):
-        from bot.handlers.admin.role_management_states import role_view_handler
+        from apps.telegram_bot.handlers.admin.role_management_states import role_view_handler
 
         role_id = await get_role_id_by_name('USER')
         call = make_callback_query(data=f"role_v_{role_id}", user_id=900101)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await role_view_handler(call)
 
@@ -176,25 +176,25 @@ class TestRoleManagementHandlers:
         assert "admin.roles.detail" in text
 
     async def test_role_view_perm_denied(self, make_callback_query):
-        from bot.handlers.admin.role_management_states import role_view_handler
+        from apps.telegram_bot.handlers.admin.role_management_states import role_view_handler
 
         # OWNER role has perms=127, caller has perms=31 (ADMIN)
         role_id = await get_role_id_by_name('OWNER')
         call = make_callback_query(data=f"role_v_{role_id}", user_id=900102)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=31):
             await role_view_handler(call)
 
         call.answer.assert_called_once()
 
     async def test_role_create_name(self, make_message, fsm_context):
-        from bot.handlers.admin.role_management_states import role_create_name
+        from apps.telegram_bot.handlers.admin.role_management_states import role_create_name
 
         msg = make_message(text="Moderator", user_id=900103)
         await fsm_context.set_state("waiting_role_name")
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await role_create_name(msg, fsm_context)
 
@@ -204,12 +204,12 @@ class TestRoleManagementHandlers:
         assert data['mode'] == 'create'
 
     async def test_role_create_name_too_long(self, make_message, fsm_context):
-        from bot.handlers.admin.role_management_states import role_create_name
+        from apps.telegram_bot.handlers.admin.role_management_states import role_create_name
 
         msg = make_message(text="A" * 65, user_id=900104)
         await fsm_context.set_state("waiting_role_name")
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await role_create_name(msg, fsm_context)
 
@@ -218,7 +218,7 @@ class TestRoleManagementHandlers:
         assert "name_invalid" in text
 
     async def test_role_create_done(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import _perms_done
+        from apps.telegram_bot.handlers.admin.role_management_states import _perms_done
 
         call = make_callback_query(data="rp_done", user_id=900105)
         await fsm_context.update_data(
@@ -235,7 +235,7 @@ class TestRoleManagementHandlers:
         assert role_id is not None
 
     async def test_role_create_duplicate(self, make_callback_query, fsm_context, role_factory):
-        from bot.handlers.admin.role_management_states import _perms_done
+        from apps.telegram_bot.handlers.admin.role_management_states import _perms_done
 
         await role_factory("EXISTING", 3)
         call = make_callback_query(data="rp_done", user_id=900106)
@@ -250,7 +250,7 @@ class TestRoleManagementHandlers:
         assert "name_exists" in text
 
     async def test_role_edit_skip_name(self, make_message, fsm_context):
-        from bot.handlers.admin.role_management_states import role_edit_name
+        from apps.telegram_bot.handlers.admin.role_management_states import role_edit_name
 
         await fsm_context.update_data(
             role_id=1, role_name="ORIGINAL", role_perms=3, caller_perms=127, mode='edit'
@@ -265,7 +265,7 @@ class TestRoleManagementHandlers:
         assert data['role_name'] == 'ORIGINAL'
 
     async def test_role_edit_done(self, make_callback_query, fsm_context, role_factory):
-        from bot.handlers.admin.role_management_states import _perms_done
+        from apps.telegram_bot.handlers.admin.role_management_states import _perms_done
 
         role_id = await role_factory("EDITABLE", 3)
         call = make_callback_query(data="rp_done", user_id=900108)
@@ -283,7 +283,7 @@ class TestRoleManagementHandlers:
         assert role['permissions'] == 7
 
     async def test_perms_done_escalation_denied(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import _perms_done
+        from apps.telegram_bot.handlers.admin.role_management_states import _perms_done
 
         call = make_callback_query(data="rp_done", user_id=900109)
         await fsm_context.update_data(
@@ -295,7 +295,7 @@ class TestRoleManagementHandlers:
         call.answer.assert_called_once()
 
     async def test_toggle_perm(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import _toggle_perm
+        from apps.telegram_bot.handlers.admin.role_management_states import _toggle_perm
 
         call = make_callback_query(data="rp_t_2", user_id=900110)  # BROADCAST=2
         await fsm_context.update_data(role_perms=1, caller_perms=127)
@@ -306,7 +306,7 @@ class TestRoleManagementHandlers:
         assert data['role_perms'] == 3  # 1 XOR 2 = 3
 
     async def test_toggle_perm_off(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import _toggle_perm
+        from apps.telegram_bot.handlers.admin.role_management_states import _toggle_perm
 
         call = make_callback_query(data="rp_t_2", user_id=900111)
         await fsm_context.update_data(role_perms=3, caller_perms=127)
@@ -317,7 +317,7 @@ class TestRoleManagementHandlers:
         assert data['role_perms'] == 1  # 3 XOR 2 = 1
 
     async def test_toggle_perm_denied(self, make_callback_query, fsm_context):
-        from bot.handlers.admin.role_management_states import _toggle_perm
+        from apps.telegram_bot.handlers.admin.role_management_states import _toggle_perm
 
         call = make_callback_query(data="rp_t_64", user_id=900112)  # OWN=64
         await fsm_context.update_data(role_perms=0, caller_perms=31)  # No OWN perm
@@ -329,12 +329,12 @@ class TestRoleManagementHandlers:
         assert data['role_perms'] == 0  # Unchanged
 
     async def test_delete_role_confirm(self, make_callback_query, role_factory):
-        from bot.handlers.admin.role_management_states import role_delete_confirm
+        from apps.telegram_bot.handlers.admin.role_management_states import role_delete_confirm
 
         role_id = await role_factory("DELETEME", 3)
         call = make_callback_query(data=f"role_dc_{role_id}", user_id=900113)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await role_delete_confirm(call)
 
@@ -344,25 +344,25 @@ class TestRoleManagementHandlers:
         assert await get_role_by_id(role_id) is None
 
     async def test_delete_role_perm_denied(self, make_callback_query):
-        from bot.handlers.admin.role_management_states import role_delete_confirm
+        from apps.telegram_bot.handlers.admin.role_management_states import role_delete_confirm
 
         # OWNER role has perms=127, caller has perms=31
         role_id = await get_role_id_by_name('OWNER')
         call = make_callback_query(data=f"role_dc_{role_id}", user_id=900114)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=31):
             await role_delete_confirm(call)
 
         call.answer.assert_called_once()
 
     async def test_assign_role_list(self, make_callback_query, user_factory):
-        from bot.handlers.admin.role_management_states import assign_role_list
+        from apps.telegram_bot.handlers.admin.role_management_states import assign_role_list
 
         await user_factory(telegram_id=700010, role_id=1)
         call = make_callback_query(data="asr_list_700010", user_id=900115)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await assign_role_list(call)
 
@@ -371,27 +371,27 @@ class TestRoleManagementHandlers:
         assert "admin.roles.assign_prompt" in text
 
     async def test_assign_role_list_owner_protected(self, make_callback_query, user_factory):
-        from bot.handlers.admin.role_management_states import assign_role_list
+        from apps.telegram_bot.handlers.admin.role_management_states import assign_role_list
 
         max_role = await select_max_role_id()
         await user_factory(telegram_id=700011, role_id=max_role)
         call = make_callback_query(data="asr_list_700011", user_id=900116)
 
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=127):
             await assign_role_list(call)
 
         call.answer.assert_called_once()
 
     async def test_assign_role_perm_denied(self, make_callback_query, user_factory):
-        from bot.handlers.admin.role_management_states import assign_role_confirm
+        from apps.telegram_bot.handlers.admin.role_management_states import assign_role_confirm
 
         await user_factory(telegram_id=700012, role_id=1)
         owner_role_id = await get_role_id_by_name('OWNER')
         call = make_callback_query(data=f"asr_{owner_role_id}_700012", user_id=900117)
 
         # Caller has ADMIN perms (31), trying to assign OWNER role (127)
-        with patch('bot.handlers.admin.role_management_states.check_role_cached',
+        with patch('apps.telegram_bot.handlers.admin.role_management_states.check_role_cached',
                    new_callable=AsyncMock, return_value=31):
             await assign_role_confirm(call)
 
@@ -403,25 +403,25 @@ class TestRoleManagementHandlers:
 class TestHelpers:
 
     def test_format_permissions_all(self):
-        from bot.handlers.admin.role_management_states import _format_permissions
+        from apps.telegram_bot.handlers.admin.role_management_states import _format_permissions
         result = _format_permissions(127)
         assert "USE" in result
         assert "BROADCAST" in result
         assert "OWNER" in result
 
     def test_format_permissions_none(self):
-        from bot.handlers.admin.role_management_states import _format_permissions
+        from apps.telegram_bot.handlers.admin.role_management_states import _format_permissions
         assert _format_permissions(0) == "\u2014"  # em dash
 
     def test_format_permissions_partial(self):
-        from bot.handlers.admin.role_management_states import _format_permissions
+        from apps.telegram_bot.handlers.admin.role_management_states import _format_permissions
         result = _format_permissions(3)  # USE + BROADCAST
         assert "USE" in result
         assert "BROADCAST" in result
         assert "SHOP" not in result
 
     def test_build_perms_keyboard_filters_by_caller(self):
-        from bot.handlers.admin.role_management_states import _build_perms_keyboard
+        from apps.telegram_bot.handlers.admin.role_management_states import _build_perms_keyboard
         # Caller only has USE + BROADCAST (3)
         markup = _build_perms_keyboard(0, 3)
         texts = [btn.text for row in markup.inline_keyboard for btn in row]
@@ -432,7 +432,7 @@ class TestHelpers:
         assert any("BROADCAST" in t for t in perm_buttons)
 
     def test_build_perms_keyboard_shows_checked(self):
-        from bot.handlers.admin.role_management_states import _build_perms_keyboard
+        from apps.telegram_bot.handlers.admin.role_management_states import _build_perms_keyboard
         markup = _build_perms_keyboard(1, 127)  # USE is on
         texts = [btn.text for row in markup.inline_keyboard for btn in row]
         use_btn = next(t for t in texts if "USE" in t)
@@ -442,31 +442,31 @@ class TestHelpers:
 class TestPermissionHelpers:
 
     def test_subset_same(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.is_subset(31, 31) is True
 
     def test_subset_less_bits(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.is_subset(1, 31) is True  # USE is subset of ADMIN
 
     def test_subset_fails_extra_bit(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.is_subset(32, 31) is False  # ADMINS_MANAGE not in ADMIN(31)
 
     def test_subset_zero(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.is_subset(0, 0) is True
 
     def test_has_any_admin_perm_true(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(31) is True  # ADMIN
 
     def test_has_any_admin_perm_false(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(1) is False  # Only USE
 
     def test_has_any_admin_perm_zero(self):
-        from bot.database.models import Permission
+        from packages.database.models import Permission
         assert Permission.has_any_admin_perm(0) is False
 
 
@@ -488,7 +488,7 @@ class TestBitwiseRegressions:
 
     async def test_perms_done_escalation_denied_bitwise(self, make_callback_query, fsm_context):
         """perms=32 (ADMINS_MANAGE only) denied when caller=31 (ADMIN)."""
-        from bot.handlers.admin.role_management_states import _perms_done
+        from apps.telegram_bot.handlers.admin.role_management_states import _perms_done
 
         call = make_callback_query(data="rp_done", user_id=900120)
         await fsm_context.update_data(

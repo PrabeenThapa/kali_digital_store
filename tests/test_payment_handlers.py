@@ -5,31 +5,31 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 from sqlalchemy import select
 
-from bot.database.methods.read import check_user
-from bot.database.main import Database
-from bot.database.models.main import Payments
+from packages.database.methods.read import check_user
+from packages.database.engine import Database
+from packages.database.models.main import Payments
 
 
 class TestReplenishBalance:
 
     async def test_no_payment_methods_enabled(self, make_callback_query, fsm_context):
-        from bot.handlers.user.balance_and_payment import replenish_balance_callback_handler
+        from apps.telegram_bot.handlers.user.balance_and_payment import replenish_balance_callback_handler
 
         call = make_callback_query(data="replenish_balance", user_id=400001)
 
-        with patch('bot.handlers.user.balance_and_payment._any_payment_method_enabled', return_value=False):
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment._any_payment_method_enabled', return_value=False):
             await replenish_balance_callback_handler(call, fsm_context)
 
         call.answer.assert_called_once()
 
     async def test_sets_waiting_amount_state(self, make_callback_query, fsm_context):
-        from bot.handlers.user.balance_and_payment import replenish_balance_callback_handler
-        from bot.states import BalanceStates
+        from apps.telegram_bot.handlers.user.balance_and_payment import replenish_balance_callback_handler
+        from apps.telegram_bot.states import BalanceStates
 
         call = make_callback_query(data="replenish_balance", user_id=400002)
 
-        with patch('bot.handlers.user.balance_and_payment._any_payment_method_enabled', return_value=True), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment._any_payment_method_enabled', return_value=True), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.PAY_CURRENCY = "RUB"
             await replenish_balance_callback_handler(call, fsm_context)
 
@@ -40,7 +40,7 @@ class TestReplenishBalance:
 class TestCheckingPayment:
 
     async def test_no_active_invoice(self, make_callback_query, fsm_context):
-        from bot.handlers.user.balance_and_payment import checking_payment
+        from apps.telegram_bot.handlers.user.balance_and_payment import checking_payment
 
         call = make_callback_query(data="check", user_id=400010)
         # Empty state - no payment_type
@@ -51,7 +51,7 @@ class TestCheckingPayment:
         call.answer.assert_called_once()
 
     async def test_cryptopay_paid_credits_balance(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.balance_and_payment import checking_payment
+        from apps.telegram_bot.handlers.user.balance_and_payment import checking_payment
 
         await user_factory(telegram_id=400011, balance=0)
 
@@ -68,8 +68,8 @@ class TestCheckingPayment:
             "amount": "100.00",
         })
 
-        with patch('bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.REFERRAL_PERCENT = 0
             env.PAY_CURRENCY = "RUB"
             await checking_payment(call, fsm_context)
@@ -88,7 +88,7 @@ class TestCheckingPayment:
             assert payment.status == "succeeded"
 
     async def test_cryptopay_not_paid_yet(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.balance_and_payment import checking_payment
+        from apps.telegram_bot.handlers.user.balance_and_payment import checking_payment
 
         await user_factory(telegram_id=400012)
 
@@ -98,7 +98,7 @@ class TestCheckingPayment:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(return_value={"status": "active"})
 
-        with patch('bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto):
             await checking_payment(call, fsm_context)
 
         call.answer.assert_called()
@@ -107,7 +107,7 @@ class TestCheckingPayment:
         assert user['balance'] == Decimal("0")
 
     async def test_cryptopay_expired(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.balance_and_payment import checking_payment
+        from apps.telegram_bot.handlers.user.balance_and_payment import checking_payment
 
         await user_factory(telegram_id=400013)
 
@@ -117,13 +117,13 @@ class TestCheckingPayment:
         mock_crypto = AsyncMock()
         mock_crypto.get_invoice = AsyncMock(return_value={"status": "expired"})
 
-        with patch('bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto):
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto):
             await checking_payment(call, fsm_context)
 
         call.answer.assert_called()
 
     async def test_cryptopay_already_processed(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.balance_and_payment import checking_payment
+        from apps.telegram_bot.handlers.user.balance_and_payment import checking_payment
 
         await user_factory(telegram_id=400014, balance=0)
 
@@ -136,8 +136,8 @@ class TestCheckingPayment:
             "status": "paid", "amount": "50.00"
         })
 
-        with patch('bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.REFERRAL_PERCENT = 0
             env.PAY_CURRENCY = "RUB"
             await checking_payment(call1, fsm_context)
@@ -146,8 +146,8 @@ class TestCheckingPayment:
         call2 = make_callback_query(data="check", user_id=400014)
         await fsm_context.update_data(payment_type="cryptopay", invoice_id="inv_dup")
 
-        with patch('bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.handlers.user.balance_and_payment.CryptoPayAPI', return_value=mock_crypto), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.REFERRAL_PERCENT = 0
             env.PAY_CURRENCY = "RUB"
             await checking_payment(call2, fsm_context)
@@ -160,7 +160,7 @@ class TestCheckingPayment:
 class TestBuyItemHandler:
 
     async def test_buy_item_success(self, make_callback_query, fsm_context, user_factory, item_factory):
-        from bot.handlers.user.balance_and_payment import buy_item_callback_handler
+        from apps.telegram_bot.handlers.user.balance_and_payment import buy_item_callback_handler
 
         await user_factory(telegram_id=400020, balance=500)
         await item_factory(name="TestWidget", price=100, values=[("widget_value_1", False)])
@@ -168,8 +168,8 @@ class TestBuyItemHandler:
         call = make_callback_query(data="buy", user_id=400020)
         await fsm_context.update_data(csrf_item="TestWidget")
 
-        with patch('bot.main.security_middleware', None), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.main.security_middleware', None), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.PAY_CURRENCY = "RUB"
             await buy_item_callback_handler(call, fsm_context)
 
@@ -177,7 +177,7 @@ class TestBuyItemHandler:
         assert user['balance'] == Decimal("400")
 
     async def test_buy_item_insufficient_funds(self, make_callback_query, fsm_context, user_factory, item_factory):
-        from bot.handlers.user.balance_and_payment import buy_item_callback_handler
+        from apps.telegram_bot.handlers.user.balance_and_payment import buy_item_callback_handler
 
         await user_factory(telegram_id=400021, balance=10)
         await item_factory(name="ExpensiveItem", price=1000, values=[("val", False)])
@@ -185,8 +185,8 @@ class TestBuyItemHandler:
         call = make_callback_query(data="buy", user_id=400021)
         await fsm_context.update_data(csrf_item="ExpensiveItem")
 
-        with patch('bot.main.security_middleware', None), \
-             patch('bot.handlers.user.balance_and_payment.EnvKeys') as env:
+        with patch('apps.telegram_bot.main.security_middleware', None), \
+             patch('apps.telegram_bot.handlers.user.balance_and_payment.EnvKeys') as env:
             env.PAY_CURRENCY = "RUB"
             await buy_item_callback_handler(call, fsm_context)
 
@@ -195,7 +195,7 @@ class TestBuyItemHandler:
         assert user['balance'] == Decimal("10")
 
     async def test_buy_item_no_csrf_item(self, make_callback_query, fsm_context, user_factory):
-        from bot.handlers.user.balance_and_payment import buy_item_callback_handler
+        from apps.telegram_bot.handlers.user.balance_and_payment import buy_item_callback_handler
 
         await user_factory(telegram_id=400022)
 

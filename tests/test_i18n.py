@@ -1,36 +1,35 @@
 import pytest
 from unittest.mock import patch
 
+from apps.telegram_bot.i18n.translator import get_locale, localize
+from apps.telegram_bot.i18n.strings import DEFAULT_LOCALE
+
 
 class TestGetLocale:
 
     def test_valid_locale(self):
-        from bot.i18n.main import get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = get_locale()
         assert result == "ru"
         get_locale.cache_clear()
 
     def test_invalid_locale_falls_back(self):
-        from bot.i18n.main import get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "xx"
             result = get_locale()
 
-        from bot.i18n.strings import DEFAULT_LOCALE
         assert result == DEFAULT_LOCALE
         get_locale.cache_clear()
 
     def test_locale_stripped_and_lowered(self):
-        from bot.i18n.main import get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "  RU  "
             result = get_locale()
         assert result == "ru"
@@ -40,10 +39,9 @@ class TestGetLocale:
 class TestLocalize:
 
     def test_existing_key(self):
-        from bot.i18n.main import localize, get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = localize("btn.shop")
 
@@ -51,10 +49,9 @@ class TestLocalize:
         get_locale.cache_clear()
 
     def test_missing_key_returns_key(self):
-        from bot.i18n.main import localize, get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = localize("nonexistent.key.that.does.not.exist")
 
@@ -62,13 +59,11 @@ class TestLocalize:
         get_locale.cache_clear()
 
     def test_format_with_kwargs(self):
-        from bot.i18n.main import localize, get_locale
-        from bot.i18n.strings import TRANSLATIONS
         get_locale.cache_clear()
 
         # Find a key that uses format placeholders
         # profile.caption uses {id} and {name}
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = localize("profile.caption", id=12345, name="TestUser")
 
@@ -77,11 +72,10 @@ class TestLocalize:
         get_locale.cache_clear()
 
     def test_format_error_returns_unformatted(self):
-        from bot.i18n.main import localize, get_locale
         get_locale.cache_clear()
 
         # profile.caption expects {id} and {name} — pass wrong kwargs
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = localize("profile.caption", wrong_key="value")
 
@@ -90,10 +84,9 @@ class TestLocalize:
         get_locale.cache_clear()
 
     def test_localize_returns_string(self):
-        from bot.i18n.main import localize, get_locale
         get_locale.cache_clear()
 
-        with patch('bot.i18n.main.EnvKeys') as env:
+        with patch('apps.telegram_bot.i18n.translator.EnvKeys') as env:
             env.BOT_LOCALE = "ru"
             result = localize("btn.back")
 

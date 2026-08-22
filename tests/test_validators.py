@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from pydantic import ValidationError
 
-from bot.misc.validators import validate_telegram_id, validate_money_amount, sanitize_html, PaymentRequest, \
+from apps.telegram_bot.utils.validators import validate_telegram_id, validate_money_amount, sanitize_html, PaymentRequest, \
     ItemPurchaseRequest, CategoryRequest, BroadcastMessage
 
 

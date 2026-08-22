@@ -2,9 +2,9 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 
-load_dotenv(encoding='utf-8')
+from apps.telegram_bot.main import start_bot
 
-from bot import start_bot
+load_dotenv(encoding='utf-8')
 
 if __name__ == "__main__":
     try:

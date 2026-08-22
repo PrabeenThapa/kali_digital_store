@@ -1,6 +1,6 @@
 import time
 
-from bot.web.admin import LoginRateLimiter
+from apps.telegram_bot.web.admin import LoginRateLimiter
 
 
 class TestLoginRateLimiter:

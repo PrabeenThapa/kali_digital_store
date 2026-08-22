@@ -1,13 +1,13 @@
 import asyncio
 from decimal import Decimal
 
-from bot.database.methods.read import invalidate_user_cache, invalidate_item_cache, invalidate_category_cache, \
+from packages.database.methods.read import invalidate_user_cache, invalidate_item_cache, invalidate_category_cache, \
     invalidate_stats_cache
 
-from bot.database.methods.update import update_balance, set_role, \
+from packages.database.methods.update import update_balance, set_role, \
     set_user_blocked
-from bot.database.methods.delete import delete_item, delete_category
-from bot.database.methods.transactions import buy_item_transaction, \
+from packages.database.methods.delete import delete_item, delete_category
+from packages.database.methods.transactions import buy_item_transaction, \
     process_payment_with_referral
 
 

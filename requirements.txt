@@ -17,11 +17,15 @@ uvicorn
 itsdangerous
 
 # Validation & Security
-pydantic~=2.5.0
-cryptography~=41.0.7
+pydantic>=2.5,<3
+pydantic[email]
+cryptography>=41.0,<44
+bcrypt>=4.0.0
 
 # Utils
 python-dateutil~=2.8.2
+fastapi[standard]
+PyJWT~=2.8.0
 
 # Testing
 pytest~=8.4.2

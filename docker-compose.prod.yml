@@ -1,0 +1,140 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-KaliRedis_2026}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-KaliRedis_2026}", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    env_file:
+      - .env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shop_user} -d ${POSTGRES_DB:-telegram_shop}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  bot:
+    build: .
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: 9090
+      BYBIT_UID: ${BYBIT_UID}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
+      SUPPORT_GROUP_ID: ${SUPPORT_GROUP_ID}
+      SAFWAN_API_KEY: ${SAFWAN_API_KEY}
+      SAFWAN_BASE_URL: ${SAFWAN_BASE_URL}
+      CANBOSO_API_KEY: ${CANBOSO_API_KEY}
+      CANBOSO_BASE_URL: ${CANBOSO_BASE_URL}
+      GGSOMA_API_KEY: ${GGSOMA_API_KEY}
+      GGSOMA_BASE_URL: ${GGSOMA_BASE_URL}
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  notify:
+    build: .
+    command: python -m notify_bot
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
+      BYBIT_UID: ${BYBIT_UID}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: python run_api.py
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      BYBIT_UID: ${BYBIT_UID}
+      BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

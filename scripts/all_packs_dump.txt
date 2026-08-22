@@ -1,0 +1,325 @@
+================================================================
+PACK:  namlc1Emoji
+Title: namlc1_emoji
+Type:  custom_emoji   |   Count: 30
+================================================================
+
+  [  0]  emoji='🤶'  custom_emoji_id=6174520215376763867
+  [  1]  emoji='😂'  custom_emoji_id=6174771823150900241
+  [  2]  emoji='👍'  custom_emoji_id=6177045544477662408
+  [  3]  emoji='😭'  custom_emoji_id=6178962311072456422
+  [  4]  emoji='🙂'  custom_emoji_id=6174584936238947057
+  [  5]  emoji='❤️'  custom_emoji_id=6174942634000259831
+  [  6]  emoji='❤️'  custom_emoji_id=6174854857753631984
+  [  7]  emoji='❤️'  custom_emoji_id=6177161027558316737
+  [  8]  emoji='😳'  custom_emoji_id=6174491980261763426
+  [  9]  emoji='😮'  custom_emoji_id=6176797656145206338
+  [ 10]  emoji='😁'  custom_emoji_id=6179337489350663129
+  [ 11]  emoji='😘'  custom_emoji_id=6201889194390855235
+  [ 12]  emoji='🥹'  custom_emoji_id=6201693472731176318
+  [ 13]  emoji='🐦'  custom_emoji_id=6219689196722854904
+  [ 14]  emoji='😲'  custom_emoji_id=6222054637076226262
+  [ 15]  emoji='🫤'  custom_emoji_id=6222208096257712941
+  [ 16]  emoji='🤤'  custom_emoji_id=6221761539918013737
+  [ 17]  emoji='😵'  custom_emoji_id=6273793612715138423
+  [ 18]  emoji='😁'  custom_emoji_id=6318628415540829579
+  [ 19]  emoji='😊'  custom_emoji_id=6318816857230942976
+  [ 20]  emoji='🔝'  custom_emoji_id=6321094100430905243
+  [ 21]  emoji='👍'  custom_emoji_id=6320826657112333009
+  [ 22]  emoji='👍'  custom_emoji_id=6104729848675050039
+  [ 23]  emoji='🔥'  custom_emoji_id=6107275003344985788
+  [ 24]  emoji='✔️'  custom_emoji_id=6105050957609968229
+  [ 25]  emoji='🔼'  custom_emoji_id=6113945650196388135
+  [ 26]  emoji='😙'  custom_emoji_id=6116431787720712232
+  [ 27]  emoji='😶'  custom_emoji_id=6133975818591805751
+  [ 28]  emoji='😄'  custom_emoji_id=6179217741367484943
+  [ 29]  emoji='😯'  custom_emoji_id=6222154452116184059
+
+================================================================
+PACK:  ApplicationEmoji
+Title: Application Emoji
+Type:  custom_emoji   |   Count: 150
+================================================================
+
+  [  0]  emoji='📱'  custom_emoji_id=5323379047315555501
+  [  1]  emoji='📱'  custom_emoji_id=5334954057192719331
+  [  2]  emoji='📱'  custom_emoji_id=5335012820935261564
+  [  3]  emoji='📱'  custom_emoji_id=5323764984486837459
+  [  4]  emoji='📱'  custom_emoji_id=5325612636467903082
+  [  5]  emoji='📱'  custom_emoji_id=5323261730283863478
+  [  6]  emoji='📱'  custom_emoji_id=5330081305126255700
+  [  7]  emoji='📱'  custom_emoji_id=5334750591707005005
+  [  8]  emoji='📱'  custom_emoji_id=5330345557284109044
+  [  9]  emoji='📱'  custom_emoji_id=5334595899869905653
+  [ 10]  emoji='📱'  custom_emoji_id=5319160079465857105
+  [ 11]  emoji='📱'  custom_emoji_id=5334933574493683027
+  [ 12]  emoji='📱'  custom_emoji_id=5325726234057915652
+  [ 13]  emoji='📱'  custom_emoji_id=5321403907820240828
+  [ 14]  emoji='📱'  custom_emoji_id=5323608076446613036
+  [ 15]  emoji='📱'  custom_emoji_id=5325647210954637197
+  [ 16]  emoji='📱'  custom_emoji_id=5323687726615119535
+  [ 17]  emoji='📱'  custom_emoji_id=5321447183910716259
+  [ 18]  emoji='📱'  custom_emoji_id=5325865356638569272
+  [ 19]  emoji='📱'  custom_emoji_id=5325742125436910868
+  [ 20]  emoji='📱'  custom_emoji_id=5328064671951896068
+  [ 21]  emoji='📱'  custom_emoji_id=5327959866159938948
+  [ 22]  emoji='📱'  custom_emoji_id=5330321861949539755
+  [ 23]  emoji='📱'  custom_emoji_id=5328050550099427291
+  [ 24]  emoji='📱'  custom_emoji_id=5328175271654736902
+  [ 25]  emoji='📱'  custom_emoji_id=5330248916224983855
+  [ 26]  emoji='📱'  custom_emoji_id=5330237710655306682
+  [ 27]  emoji='📱'  custom_emoji_id=5334592721594105691
+  [ 28]  emoji='📱'  custom_emoji_id=5327982530702359565
+  [ 29]  emoji='📱'  custom_emoji_id=5328029650788563621
+  [ 30]  emoji='📱'  custom_emoji_id=5334792209940102096
+  [ 31]  emoji='📱'  custom_emoji_id=5328242556612395440
+  [ 32]  emoji='📱'  custom_emoji_id=5334678011054669335
+  [ 33]  emoji='📱'  custom_emoji_id=5332449498553663205
+  [ 34]  emoji='📱'  custom_emoji_id=5334764984142412896
+  [ 35]  emoji='📱'  custom_emoji_id=5334853932915114338
+  [ 36]  emoji='📱'  custom_emoji_id=5334807822146225472
+  [ 37]  emoji='📱'  custom_emoji_id=5332524123610430820
+  [ 38]  emoji='📱'  custom_emoji_id=5332823323917173335
+  [ 39]  emoji='📱'  custom_emoji_id=5334663339446387801
+  [ 40]  emoji='📱'  custom_emoji_id=5334998226636390258
+  [ 41]  emoji='📱'  custom_emoji_id=5330337435500951363
+  [ 42]  emoji='📱'  custom_emoji_id=5334707727933390944
+  [ 43]  emoji='📱'  custom_emoji_id=5334681713316479679
+  [ 44]  emoji='📱'  custom_emoji_id=5334942061349059951
+  [ 45]  emoji='📱'  custom_emoji_id=5321533581472842536
+  [ 46]  emoji='📱'  custom_emoji_id=5334932883003949665
+  [ 47]  emoji='📱'  custom_emoji_id=5346056560537779652
+  [ 48]  emoji='📱'  custom_emoji_id=5334955749409834455
+  [ 49]  emoji='📱'  custom_emoji_id=5332394707655869572
+  [ 50]  emoji='📱'  custom_emoji_id=5346024142124633117
+  [ 51]  emoji='📱'  custom_emoji_id=5346242859039209592
+  [ 52]  emoji='📱'  custom_emoji_id=5346309375197725525
+  [ 53]  emoji='📱'  custom_emoji_id=5357184657592962696
+  [ 54]  emoji='📱'  custom_emoji_id=5346319945112240722
+  [ 55]  emoji='📱'  custom_emoji_id=5318911503938634641
+  [ 56]  emoji='📱'  custom_emoji_id=5346134750417403743
+  [ 57]  emoji='📱'  custom_emoji_id=5345799562579688546
+  [ 58]  emoji='📱'  custom_emoji_id=5346242644290846992
+  [ 59]  emoji='📱'  custom_emoji_id=5345937224871461019
+  [ 60]  emoji='📱'  custom_emoji_id=5346251367369425932
+  [ 61]  emoji='📱'  custom_emoji_id=5345776794958053103
+  [ 62]  emoji='📱'  custom_emoji_id=5346259862814734771
+  [ 63]  emoji='📱'  custom_emoji_id=5345844509412444249
+  [ 64]  emoji='📱'  custom_emoji_id=5346074681004801565
+  [ 65]  emoji='📱'  custom_emoji_id=5346296430166293639
+  [ 66]  emoji='📱'  custom_emoji_id=5345967461441223890
+  [ 67]  emoji='📱'  custom_emoji_id=5346017678198848586
+  [ 68]  emoji='📱'  custom_emoji_id=5346188613602263703
+  [ 69]  emoji='📱'  custom_emoji_id=5345845252441784353
+  [ 70]  emoji='📱'  custom_emoji_id=5346008706012169915
+  [ 71]  emoji='📱'  custom_emoji_id=5346066456142429527
+  [ 72]  emoji='📱'  custom_emoji_id=5346172593374248407
+  [ 73]  emoji='📱'  custom_emoji_id=5346181118884331907
+  [ 74]  emoji='📱'  custom_emoji_id=5346308584923740680
+  [ 75]  emoji='📱'  custom_emoji_id=5346284438617604231
+  [ 76]  emoji='📱'  custom_emoji_id=5346024520081751155
+  [ 77]  emoji='📱'  custom_emoji_id=5346213374088723754
+  [ 78]  emoji='📱'  custom_emoji_id=5345833716159627218
+  [ 79]  emoji='📱'  custom_emoji_id=5346103513120258857
+  [ 80]  emoji='📱'  custom_emoji_id=5345818383126384016
+  [ 81]  emoji='📱'  custom_emoji_id=5359584650958226302
+  [ 82]  emoji='📱'  custom_emoji_id=5359321266383766546
+  [ 83]  emoji='📱'  custom_emoji_id=5359320566304096699
+  [ 84]  emoji='📱'  custom_emoji_id=5359437015752401733
+  [ 85]  emoji='📱'  custom_emoji_id=5364036341610858181
+  [ 86]  emoji='📱'  custom_emoji_id=5364075889669718872
+  [ 87]  emoji='📱'  custom_emoji_id=5364111181415996352
+  [ 88]  emoji='📱'  custom_emoji_id=5366068097365066701
+  [ 89]  emoji='📱'  custom_emoji_id=5363831115188553043
+  [ 90]  emoji='📱'  custom_emoji_id=5363810946022131056
+  [ 91]  emoji='📱'  custom_emoji_id=5364199932620194408
+  [ 92]  emoji='📱'  custom_emoji_id=5363899233369868662
+  [ 93]  emoji='📱'  custom_emoji_id=5359772714691216710
+  [ 94]  emoji='📱'  custom_emoji_id=5359472852959512416
+  [ 95]  emoji='📱'  custom_emoji_id=5357394595594388140
+  [ 96]  emoji='📱'  custom_emoji_id=5363989350373671453
+  [ 97]  emoji='📱'  custom_emoji_id=5364101182732127639
+  [ 98]  emoji='📱'  custom_emoji_id=5359480394922082925
+  [ 99]  emoji='📱'  custom_emoji_id=5359320531944358335
+  [100]  emoji='📱'  custom_emoji_id=5363858422590619939
+  [101]  emoji='📱'  custom_emoji_id=5363973751052452405
+  [102]  emoji='📱'  custom_emoji_id=5364121867294621703
+  [103]  emoji='📱'  custom_emoji_id=5364339557712020484
+  [104]  emoji='📱'  custom_emoji_id=5364314346253991843
+  [105]  emoji='📱'  custom_emoji_id=5363892211098339885
+  [106]  emoji='📱'  custom_emoji_id=5364343191254352560
+  [107]  emoji='📱'  custom_emoji_id=5357286671656176924
+  [108]  emoji='📱'  custom_emoji_id=5359602676935968589
+  [109]  emoji='📱'  custom_emoji_id=5363977152666550281
+  [110]  emoji='📱'  custom_emoji_id=5364182988974211543
+  [111]  emoji='📱'  custom_emoji_id=5364290083983736876
+  [112]  emoji='📱'  custom_emoji_id=5364105576483668906
+  [113]  emoji='📱'  custom_emoji_id=5364006925379846491
+  [114]  emoji='📱'  custom_emoji_id=5363986369666369188
+  [115]  emoji='📱'  custom_emoji_id=5364226346669065610
+  [116]  emoji='📱'  custom_emoji_id=5363863671040657237
+  [117]  emoji='📱'  custom_emoji_id=5359726582447487916
+  [118]  emoji='📱'  custom_emoji_id=5372937764411031477
+  [119]  emoji='📱'  custom_emoji_id=5359618237602480327
+  [120]  emoji='📱'  custom_emoji_id=5371089601328857708
+  [121]  emoji='📱'  custom_emoji_id=5359758030198031389
+  [122]  emoji='📱'  custom_emoji_id=5359503252738029857
+  [123]  emoji='📱'  custom_emoji_id=5362034259785694259
+  [124]  emoji='📱'  custom_emoji_id=5361963895336485277
+  [125]  emoji='📱'  custom_emoji_id=5361575381184823162
+  [126]  emoji='📱'  custom_emoji_id=5370988368949690738
+  [127]  emoji='📱'  custom_emoji_id=5373262983629650845
+  [128]  emoji='📱'  custom_emoji_id=5373193993569977969
+  [129]  emoji='📱'  custom_emoji_id=5372994299065550645
+  [130]  emoji='📱'  custom_emoji_id=5372878055775683161
+  [131]  emoji='📱'  custom_emoji_id=5373246052868571826
+  [132]  emoji='📱'  custom_emoji_id=5373025510592888616
+  [133]  emoji='📱'  custom_emoji_id=5373145666597961572
+  [134]  emoji='📱'  custom_emoji_id=5373054312643575332
+  [135]  emoji='📱'  custom_emoji_id=5372917956021862036
+  [136]  emoji='📱'  custom_emoji_id=5373232592441065346
+  [137]  emoji='📱'  custom_emoji_id=5370577035636786019
+  [138]  emoji='📱'  custom_emoji_id=5372878077250519677
+  [139]  emoji='📱'  custom_emoji_id=5373229590258925215
+  [140]  emoji='📱'  custom_emoji_id=5373054600406382936
+  [141]  emoji='📱'  custom_emoji_id=5370852523429085514
+  [142]  emoji='📱'  custom_emoji_id=5370722600668382252
+  [143]  emoji='📱'  custom_emoji_id=5373130604147654226
+  [144]  emoji='📱'  custom_emoji_id=5370857634440170316
+  [145]  emoji='📱'  custom_emoji_id=5373306783706137993
+  [146]  emoji='📱'  custom_emoji_id=5373019729566908647
+  [147]  emoji='📱'  custom_emoji_id=5373144051690258848
+  [148]  emoji='📱'  custom_emoji_id=5373265917092316632
+  [149]  emoji='📱'  custom_emoji_id=5373261557700509032
+
+================================================================
+PACK:  ADROITPACKE
+Title: @AdroitTeam
+Type:  custom_emoji   |   Count: 124
+================================================================
+
+  [  0]  emoji='👨\u200d⚖'  custom_emoji_id=5796153709931009517
+  [  1]  emoji='🕸'  custom_emoji_id=5794376731636798062
+  [  2]  emoji='🐞'  custom_emoji_id=5796403831646458962
+  [  3]  emoji='🌬'  custom_emoji_id=5796387974627202430
+  [  4]  emoji='🫧'  custom_emoji_id=5796567714713572605
+  [  5]  emoji='🍊'  custom_emoji_id=5796633857209931262
+  [  6]  emoji='🍈'  custom_emoji_id=5796561774773801876
+  [  7]  emoji='🍇'  custom_emoji_id=5794045349140108622
+  [  8]  emoji='🍒'  custom_emoji_id=5796400210989029703
+  [  9]  emoji='🫐'  custom_emoji_id=5796674118233363546
+  [ 10]  emoji='🫛'  custom_emoji_id=5794111869593588198
+  [ 11]  emoji='🥚'  custom_emoji_id=5796504385420792898
+  [ 12]  emoji='🍬'  custom_emoji_id=5796664218333745679
+  [ 13]  emoji='🧃'  custom_emoji_id=5794298344188678751
+  [ 14]  emoji='🍸'  custom_emoji_id=5796592771552777710
+  [ 15]  emoji='🌭'  custom_emoji_id=5796145970399941333
+  [ 16]  emoji='🫑'  custom_emoji_id=5796193958069539778
+  [ 17]  emoji='🥑'  custom_emoji_id=5796595022115639741
+  [ 18]  emoji='🍽'  custom_emoji_id=5794156713347126602
+  [ 19]  emoji='🍋'  custom_emoji_id=5796309230696797985
+  [ 20]  emoji='⛳️'  custom_emoji_id=5796381996032725483
+  [ 21]  emoji='🥏'  custom_emoji_id=5796345694969140339
+  [ 22]  emoji='🚀'  custom_emoji_id=5796688063992172876
+  [ 23]  emoji='🚉'  custom_emoji_id=5796533780176967219
+  [ 24]  emoji='🎥'  custom_emoji_id=5796686951595643349
+  [ 25]  emoji='💣'  custom_emoji_id=5796468002752827918
+  [ 26]  emoji='💡'  custom_emoji_id=5796431697394275354
+  [ 27]  emoji='🙈'  custom_emoji_id=5794383642239177429
+  [ 28]  emoji='🐥'  custom_emoji_id=5796653364951388986
+  [ 29]  emoji='🪿'  custom_emoji_id=5796548310051328320
+  [ 30]  emoji='😁'  custom_emoji_id=5793973558761756143
+  [ 31]  emoji='💥'  custom_emoji_id=5796314994542907832
+  [ 32]  emoji='📺'  custom_emoji_id=5794354363447120612
+  [ 33]  emoji='🪬'  custom_emoji_id=5796518537338031909
+  [ 34]  emoji='🦚'  custom_emoji_id=5796559124778980336
+  [ 35]  emoji='😕'  custom_emoji_id=5796601391552140147
+  [ 36]  emoji='😇'  custom_emoji_id=5794037489349956409
+  [ 37]  emoji='🐣'  custom_emoji_id=5796505957378822868
+  [ 38]  emoji='😃'  custom_emoji_id=5794144777633009624
+  [ 39]  emoji='🥑'  custom_emoji_id=5796567478490371776
+  [ 40]  emoji='🍏'  custom_emoji_id=5796304385973686816
+  [ 41]  emoji='🤟'  custom_emoji_id=5796370399621026430
+  [ 42]  emoji='😕'  custom_emoji_id=5796637619601283518
+  [ 43]  emoji='🚘'  custom_emoji_id=5796639925998719256
+  [ 44]  emoji='🎶'  custom_emoji_id=5796188069669376735
+  [ 45]  emoji='➕'  custom_emoji_id=5794261081052418411
+  [ 46]  emoji='™️'  custom_emoji_id=5796605106698850728
+  [ 47]  emoji='🛜'  custom_emoji_id=5796518764971299251
+  [ 48]  emoji='💎'  custom_emoji_id=5796232075904291838
+  [ 49]  emoji='💡'  custom_emoji_id=5796502474160346077
+  [ 50]  emoji='😘'  custom_emoji_id=5796460512329863976
+  [ 51]  emoji='🐠'  custom_emoji_id=5796644504433856654
+  [ 52]  emoji='🐡'  custom_emoji_id=5796200129937543354
+  [ 53]  emoji='🦼'  custom_emoji_id=5794354857368359775
+  [ 54]  emoji='🛴'  custom_emoji_id=5796314805564346672
+  [ 55]  emoji='🚘'  custom_emoji_id=5796291994993038213
+  [ 56]  emoji='🌹'  custom_emoji_id=5796409337794532823
+  [ 57]  emoji='🥀'  custom_emoji_id=5796214303329620386
+  [ 58]  emoji='😊'  custom_emoji_id=5796504875047063769
+  [ 59]  emoji='😺'  custom_emoji_id=5796185041717433060
+  [ 60]  emoji='🐁'  custom_emoji_id=5796209712009581332
+  [ 61]  emoji='🌺'  custom_emoji_id=5796676411745899189
+  [ 62]  emoji='☘'  custom_emoji_id=5794117886842770379
+  [ 63]  emoji='🍃'  custom_emoji_id=5794295402136081349
+  [ 64]  emoji='🐚'  custom_emoji_id=5796329666151191334
+  [ 65]  emoji='🪻'  custom_emoji_id=5796377211439158591
+  [ 66]  emoji='🌹'  custom_emoji_id=5796163768744415836
+  [ 67]  emoji='🌹'  custom_emoji_id=5796229378664830727
+  [ 68]  emoji='🌚'  custom_emoji_id=5796522630441867305
+  [ 69]  emoji='🤪'  custom_emoji_id=5796214698466612034
+  [ 70]  emoji='🎁'  custom_emoji_id=5796463239634096295
+  [ 71]  emoji='🥰'  custom_emoji_id=5796493776851571064
+  [ 72]  emoji='😊'  custom_emoji_id=5796236997936813443
+  [ 73]  emoji='🛵'  custom_emoji_id=5796183607198356087
+  [ 74]  emoji='🛻'  custom_emoji_id=5796683820564484775
+  [ 75]  emoji='🎆'  custom_emoji_id=5796228953463067487
+  [ 76]  emoji='🎆'  custom_emoji_id=5794068520488670034
+  [ 77]  emoji='💴'  custom_emoji_id=5796202359025570938
+  [ 78]  emoji='⚙'  custom_emoji_id=5796585573187589389
+  [ 79]  emoji='💡'  custom_emoji_id=5796383121314157551
+  [ 80]  emoji='🪛'  custom_emoji_id=5796255474886120433
+  [ 81]  emoji='⛏'  custom_emoji_id=5796590486630175268
+  [ 82]  emoji='💎'  custom_emoji_id=5794147784110117479
+  [ 83]  emoji='🔫'  custom_emoji_id=5796371348808799072
+  [ 84]  emoji='⚒'  custom_emoji_id=5796297333637387376
+  [ 85]  emoji='⚗'  custom_emoji_id=5796690834246078917
+  [ 86]  emoji='🧻'  custom_emoji_id=5796418924161536575
+  [ 87]  emoji='🪆'  custom_emoji_id=5796520495843120392
+  [ 88]  emoji='🎎'  custom_emoji_id=5794137759656448516
+  [ 89]  emoji='📬'  custom_emoji_id=5796543229105017612
+  [ 90]  emoji='📊'  custom_emoji_id=5796380243686068748
+  [ 91]  emoji='📇'  custom_emoji_id=5796687668855182655
+  [ 92]  emoji='📄'  custom_emoji_id=5796664050830020684
+  [ 93]  emoji='📑'  custom_emoji_id=5796231723716973207
+  [ 94]  emoji='🧾'  custom_emoji_id=5796545041581216407
+  [ 95]  emoji='📮'  custom_emoji_id=5796218752915739130
+  [ 96]  emoji='😕'  custom_emoji_id=5796603740899250961
+  [ 97]  emoji='💶'  custom_emoji_id=5798741384777175754
+  [ 98]  emoji='💳'  custom_emoji_id=5796487257091217499
+  [ 99]  emoji='💰'  custom_emoji_id=5798411690202632933
+  [100]  emoji='💳'  custom_emoji_id=5798689673370931928
+  [101]  emoji='💳'  custom_emoji_id=5798525614210159821
+  [102]  emoji='💰'  custom_emoji_id=5798751138647905130
+  [103]  emoji='💎'  custom_emoji_id=5798757220321595976
+  [104]  emoji='🪙'  custom_emoji_id=5798751117173068169
+  [105]  emoji='💣'  custom_emoji_id=5796674341571662882
+  [106]  emoji='💈'  custom_emoji_id=5796468449429426800
+  [107]  emoji='💈'  custom_emoji_id=5798602528484496945
+  [108]  emoji='💊'  custom_emoji_id=5798553402648565182
+  [109]  emoji='💊'  custom_emoji_id=5798575139478049918
+  [110]  emoji='🔬'  custom_emoji_id=5796444659605574073
+  [111]  emoji='💳'  custom_emoji_id=5798530750991045278
+  [112]  emoji='💶'  custom_emoji_id=5798552144223146569
+  [113]  emoji='♾'  custom_emoji_id=5798768284157350680
+  [114]  emoji='🥰'  custom_emoji_id=5798726760413532673
+  [115]  emoji='📏'  custom_emoji_id=5796437409700778064
+  [116]  emoji='🚚'  custom_emoji_id=5798514400050550229
+  [117]  emoji='😐'  custom_emoji_id=5812018782251520729
+  [118]  emoji='😕'  custom_emoji_id=5832214405672081004
+  [119]  emoji='⭐️'  custom_emoji_id=5841606983752356996
+  [120]  emoji='😕'  custom_emoji_id=5841387017002291211
+  [121]  emoji='😊'  custom_emoji_id=5861927788289724369
+  [122]  emoji='❤️'  custom_emoji_id=5875223911821479981
+  [123]  emoji='❤️'  custom_emoji_id=5904710769274000145
+
