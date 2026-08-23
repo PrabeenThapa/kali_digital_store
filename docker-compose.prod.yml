@@ -31,6 +31,7 @@ services:
 
   db:
     image: postgres:16
+    command: postgres -c shared_buffers=32MB -c work_mem=2MB -c max_connections=30 -c autovacuum=off
     mem_limit: 128m
     memswap_limit: 256m
     environment:
@@ -153,6 +154,7 @@ services:
     environment:
       PORT: 3000
       HOSTNAME: "0.0.0.0"
+      NODE_OPTIONS: "--max-old-space-size=128"
       NEXT_PUBLIC_API_URL: "/api"
     restart: unless-stopped
 

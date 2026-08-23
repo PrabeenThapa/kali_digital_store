@@ -4,4 +4,4 @@ from dotenv import load_dotenv
 load_dotenv(encoding='utf-8')
 
 if __name__ == "__main__":
-    uvicorn.run("apps.api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("apps.api.main:app", host="0.0.0.0", port=8000, reload=False, workers=1, access_log=False)
