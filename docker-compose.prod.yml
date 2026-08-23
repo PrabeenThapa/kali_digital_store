@@ -2,6 +2,8 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    mem_limit: 64m
+    memswap_limit: 128m
     ports:
       - "80:80"
       - "443:443"
@@ -16,6 +18,8 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-KaliRedis_2026}
+    mem_limit: 64m
+    memswap_limit: 128m
     volumes:
       - redis_data:/data
     healthcheck:
@@ -27,8 +31,12 @@ services:
 
   db:
     image: postgres:16
-    env_file:
-      - .env
+    mem_limit: 128m
+    memswap_limit: 256m
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shop_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KaliShop_Secure_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_shop}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -40,6 +48,8 @@ services:
 
   bot:
     build: .
+    mem_limit: 128m
+    memswap_limit: 256m
     env_file:
       - .env
     environment:
@@ -60,6 +70,7 @@ services:
       CANBOSO_BASE_URL: ${CANBOSO_BASE_URL}
       GGSOMA_API_KEY: ${GGSOMA_API_KEY}
       GGSOMA_BASE_URL: ${GGSOMA_BASE_URL}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
     volumes:
       - .:/app
       - ./data:/app/data
@@ -76,6 +87,8 @@ services:
 
   notify:
     build: .
+    mem_limit: 96m
+    memswap_limit: 192m
     command: python -m notify_bot
     env_file:
       - .env
@@ -88,6 +101,7 @@ services:
       NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
       BYBIT_UID: ${BYBIT_UID}
       BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
     volumes:
       - .:/app
       - ./logs:/app/logs
@@ -103,6 +117,8 @@ services:
 
   api:
     build: .
+    mem_limit: 192m
+    memswap_limit: 384m
     command: python run_api.py
     env_file:
       - .env
@@ -114,6 +130,7 @@ services:
       REDIS_DB: 0
       BYBIT_UID: ${BYBIT_UID}
       BINANCE_PAY_ID: ${BINANCE_PAY_ID}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
     volumes:
       - .:/app
       - ./logs:/app/logs
@@ -131,6 +148,12 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+    mem_limit: 192m
+    memswap_limit: 384m
+    environment:
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: "/api"
     restart: unless-stopped
 
 volumes:

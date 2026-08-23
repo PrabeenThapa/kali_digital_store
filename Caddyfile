@@ -2,8 +2,8 @@
     email mr.prabinthapa@gmail.com
 }
 
-kalidigitalstore.page.gd, 31.6.62.193 {
-    # Security Headers
+# 1. Primary Domain with Automatic SSL
+kalidigitalstore.page.gd {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
@@ -26,6 +26,24 @@ kalidigitalstore.page.gd, 31.6.62.193 {
     }
 
     # Next.js Web Frontend (Default)
+    handle /* {
+        reverse_proxy web:3000
+    }
+}
+
+# 2. Direct IP & Port 80 HTTP Access (Does not force SSL on raw IP)
+:80 {
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
     handle /* {
         reverse_proxy web:3000
     }

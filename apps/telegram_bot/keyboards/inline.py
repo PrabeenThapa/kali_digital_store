@@ -68,7 +68,7 @@ async def main_menu(role: int, channel: str | None = None, helper: str | None = 
     kb.row(InlineKeyboardButton(text="Shop", callback_data="shop", style="success", icon_custom_emoji_id=icons.get("shop")))
     
     # Row 2 (Green)
-    kb.row(InlineKeyboardButton(text="Visit Website", url=EnvKeys.WEB_URL or "http://127.0.0.1:3000", style="success", icon_custom_emoji_id=icons.get("visit_website")))
+    kb.row(InlineKeyboardButton(text="Visit Website", url=EnvKeys.WEB_URL or "https://kalidigitalstore.page.gd", style="success", icon_custom_emoji_id=icons.get("visit_website")))
     
     # Row 3 (Primary/Purple)
     kb.row(

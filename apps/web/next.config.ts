@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // Allow the 127.0.0.1 host to load Next.js dev bundles.
   // Without this, Next.js 16 blocks cross-origin HMR/JS requests from 127.0.0.1,
   // which prevents React from hydrating — making all button clicks silently do nothing.
-  allowedDevOrigins: ['127.0.0.1'],
+  allowedDevOrigins: ['127.0.0.1', 'localhost', '31.6.62.193', 'kalidigitalstore.page.gd'],
 };
 
 export default nextConfig;
