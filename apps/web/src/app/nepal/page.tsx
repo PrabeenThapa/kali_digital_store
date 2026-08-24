@@ -9,7 +9,8 @@ import {
   Wallet, Tag, ArrowRight, X, AlertCircle, RefreshCw, Sparkles,
   Sun, Moon, Check, PackageCheck, PackageX, LayoutGrid,
   List, Bolt, HeartHandshake, QrCode, Globe, Mail,
-  UploadCloud, ImageIcon, Camera, Trash2, ThumbsUp, Star, MessageSquare
+  UploadCloud, ImageIcon, Camera, Trash2, ThumbsUp, Star, MessageSquare,
+  Flame, Bot, Film, Palette, Briefcase, ShieldCheck, Code2
 } from 'lucide-react';
 
 interface Product {
@@ -45,15 +46,30 @@ interface PromoDiscount {
 }
 
 const AUTO_CATEGORIES = [
-  { id: 'ai',          label: '🤖 AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
-  { id: 'streaming',   label: '🎬 Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
-  { id: 'creative',    label: '🎨 Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
-  { id: 'productivity',label: '💼 Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
-  { id: 'vpn',         label: '🔒 VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
-  { id: 'dev',         label: '🔧 Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
-  { id: 'email',       label: '📧 Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
-  { id: 'other',       label: '✨ Others',             purchases: '180+ Purchases',   keywords: [] },
+  { id: 'ai',          label: 'AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
+  { id: 'streaming',   label: 'Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
+  { id: 'creative',    label: 'Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
+  { id: 'productivity',label: 'Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
+  { id: 'vpn',         label: 'VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
+  { id: 'dev',         label: 'Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
+  { id: 'email',       label: 'Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
+  { id: 'other',       label: 'Others',            purchases: '180+ Purchases',   keywords: [] },
 ];
+
+function getCategoryIcon(id: string, isSelected: boolean = false) {
+  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-500'}`;
+  switch (id) {
+    case 'all': return <Flame className={cls} />;
+    case 'ai': return <Bot className={cls} />;
+    case 'streaming': return <Film className={cls} />;
+    case 'creative': return <Palette className={cls} />;
+    case 'productivity': return <Briefcase className={cls} />;
+    case 'vpn': return <ShieldCheck className={cls} />;
+    case 'dev': return <Code2 className={cls} />;
+    case 'email': return <Mail className={cls} />;
+    default: return <Sparkles className={cls} />;
+  }
+}
 
 function getAutoCategory(productName: string): string {
   const lower = productName.toLowerCase();
@@ -496,28 +512,20 @@ export default function NepalStorePage() {
       {/* ─── Nepal Store Coming Soon Announcement Banner ─────────────────────── */}
       {nepalQrData?.coming_soon && (
         <div className="w-full bg-gradient-to-r from-amber-950/90 via-red-950/80 to-amber-950/90 border-b border-amber-500/40 p-4 sm:p-5 text-center animate-in slide-in-from-top-4 duration-300 relative z-30">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3 text-left">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400 font-extrabold text-xl shadow-lg shadow-amber-500/10">
-                🚀
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    🇳🇵 NEPAL STORE • COMING SOON
-                  </span>
-                </div>
-                <p className="text-xs font-semibold text-amber-100/90 mt-1 leading-relaxed">
-                  {nepalQrData.coming_soon_text || "🇳🇵 Nepal Store Direct Local Payment Gateway & Catalog Expansion is Coming Soon! Stay tuned as we roll out instant eSewa & Khalti automated API verification."}
-                </p>
-              </div>
+          <div className="max-w-4xl mx-auto flex items-center justify-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400 font-extrabold text-xl shadow-lg shadow-amber-500/10">
+              🚀
             </div>
-            <Link
-              href="/worldwide"
-              className="shrink-0 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5"
-            >
-              <span>Worldwide Store →</span>
-            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  🇳🇵 NEPAL STORE • COMING SOON
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-amber-100/90 mt-1 leading-relaxed">
+                {nepalQrData.coming_soon_text || "🇳🇵 Nepal Store Direct Local Payment Gateway & Catalog Expansion is Coming Soon! Stay tuned as we roll out instant eSewa & Khalti automated API verification."}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -558,44 +566,51 @@ export default function NepalStorePage() {
         </div>
       </section>
 
-      {/* ─── Main Catalog Content ───────────────────────────────────────── */}
-      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8">
-        {/* Category chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-2 scrollbar-none">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-              selectedCategory === 'all'
-                ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
-                : 'bg-secondary/60 border-border/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
-            }`}
-          >
-            🔥 All Products ({products.length})
-          </button>
-          {AUTO_CATEGORIES.map(cat => {
-            const count = categoryCounts[cat.id] || 0;
-            if (count === 0) return null;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-red-500 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
-                    : 'bg-secondary/60 border-border/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
-              >
-                <span>{cat.label} ({count})</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
-                  isSelected ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                }`}>
-                  {cat.purchases}
-                </span>
-              </button>
-            );
-          })}
+      {/* ─── Sticky Frozen Category & Status Bar ────────────────────────── */}
+      <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 py-3 shadow-md shadow-black/10">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                selectedCategory === 'all'
+                  ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                  : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }`}
+            >
+              {getCategoryIcon('all', selectedCategory === 'all')}
+              <span>All Products ({products.length})</span>
+            </button>
+            {AUTO_CATEGORIES.map(cat => {
+              const count = categoryCounts[cat.id] || 0;
+              if (count === 0) return null;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                      : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {getCategoryIcon(cat.id, isSelected)}
+                  <span>{cat.label} ({count})</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {cat.purchases}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+      </div>
+
+      {/* ─── Main Catalog Content ───────────────────────────────────────── */}
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
         {/* Filters row */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">

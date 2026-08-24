@@ -9,43 +9,43 @@ import {
   Sparkles, CheckCircle2, QrCode, Lock, Flame, Shield,
   Award, Star, HeartHandshake, Eye
 } from "lucide-react";
+import { useGeoLocation } from "@/lib/geo";
 
 export default function RegionGatewayPage() {
   const router = useRouter();
-  const [detectedCountry, setDetectedCountry] = useState<"nepal" | "worldwide">("worldwide");
+  const geo = useGeoLocation();
   const [rememberChoice, setRememberChoice] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [isClientReady, setIsClientReady] = useState(false);
 
   useEffect(() => {
-    // Check if user already has a saved region preference
-    const savedRegion = localStorage.getItem("region");
-    const token = localStorage.getItem("token");
-
-    // Try auto-detecting user's location via timezone
-    try {
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (timeZone.toLowerCase().includes("kathmandu") || timeZone.toLowerCase().includes("nepal")) {
-        setDetectedCountry("nepal");
-      }
-    } catch {
-      // Fallback default
+    setIsClientReady(true);
+    // If visitor is detected in Nepal, immediately route to /nepal
+    if (geo.is_nepal) {
+      localStorage.setItem("region", "nepal");
+      router.replace("/nepal");
+      return;
     }
-
-    setLoading(false);
-  }, []);
+    const savedRegion = localStorage.getItem("region");
+    if (savedRegion === "nepal") {
+      router.push("/nepal");
+    } else if (savedRegion === "worldwide") {
+      router.push("/worldwide");
+    }
+  }, [geo.is_nepal, router]);
 
   const selectRegion = (region: "nepal" | "worldwide") => {
-    if (rememberChoice) {
-      localStorage.setItem("region", region);
-    }
-    if (region === "nepal") {
+    if (geo.is_nepal || region === "nepal") {
+      if (rememberChoice) localStorage.setItem("region", "nepal");
       router.push("/nepal");
     } else {
+      if (rememberChoice) localStorage.setItem("region", "worldwide");
       router.push("/worldwide");
     }
   };
 
-  if (loading) {
+  const isNepal = geo.is_nepal;
+
+  if (!isClientReady || geo.loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
@@ -129,10 +129,11 @@ export default function RegionGatewayPage() {
           KALI DIGITAL STORE
         </h1>
         <p className="text-muted-foreground text-xs sm:text-sm max-w-xl mb-8 leading-relaxed font-medium">
-          Instant Automated Dispatch for ChatGPT Plus, Claude 3.7, Gemini Pro, Canva, Capcut, VPNs & Dev APIs. Select your currency region to enter.
+          Instant Automated Dispatch for ChatGPT Plus, Claude 3.7, Gemini Pro, Canva, Capcut, VPNs & Dev APIs.
+          {isNepal ? " Fast checkout with eSewa, Fonepay, Khalti & Local NPR Wallets." : " Select your currency region to enter."}
         </p>
 
-        {/* 3 Pillars of Kaali Store (From Logo) */}
+        {/* 3 Pillars of Kaali Store */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl mb-8">
           <div className="p-3 rounded-2xl bg-secondary/40 border border-red-500/20 flex items-center gap-2.5 text-left">
             <div className="w-9 h-9 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
@@ -165,18 +166,14 @@ export default function RegionGatewayPage() {
           </div>
         </div>
 
-        {/* Region Gateway Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-2xl mb-6">
+        {/* Region Gateway Cards (Crypto/Worldwide hidden for Nepal visitors) */}
+        <div className={`grid grid-cols-1 ${isNepal ? 'max-w-md' : 'md:grid-cols-2 max-w-2xl'} gap-5 w-full mb-6`}>
           {/* 🇳🇵 Nepal Store */}
           <button
             onClick={() => selectRegion("nepal")}
-            className={`glass-card p-7 rounded-3xl text-left border transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)] ${
-              detectedCountry === "nepal"
-                ? "border-red-500 ring-2 ring-red-500/30 bg-red-500/[0.06]"
-                : "border-red-500/30 hover:border-red-500"
-            }`}
+            className="glass-card p-7 rounded-3xl text-left border border-red-500 ring-2 ring-red-500/30 bg-red-500/[0.06] transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)]"
           >
-            {detectedCountry === "nepal" && (
+            {isNepal && (
               <span className="absolute top-4 right-4 text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-600 text-white shadow-sm flex items-center gap-1">
                 <MapPin className="w-3 h-3" /> Detected Region
               </span>
@@ -196,34 +193,27 @@ export default function RegionGatewayPage() {
             </div>
           </button>
 
-          {/* 🌐 Worldwide Store */}
-          <button
-            onClick={() => selectRegion("worldwide")}
-            className={`glass-card p-7 rounded-3xl text-left border transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)] ${
-              detectedCountry === "worldwide"
-                ? "border-red-500 ring-2 ring-red-500/30 bg-red-500/[0.06]"
-                : "border-red-500/30 hover:border-red-500"
-            }`}
-          >
-            {detectedCountry === "worldwide" && (
-              <span className="absolute top-4 right-4 text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-600 text-white shadow-sm flex items-center gap-1">
-                <Globe className="w-3 h-3" /> Global Portal
-              </span>
-            )}
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-purple-600/20 border border-red-500/40 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-              🌐
-            </div>
-            <div className="text-xl font-black text-foreground group-hover:text-red-400 transition-colors flex items-center gap-2 font-vedic">
-              Worldwide Store (USD)
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 mb-4 leading-relaxed flex-grow">
-              International store with global pricing in <b>USD ($)</b>. Multi-chain <b>CryptoPay, Bybit, Binance & USDT</b>.
-            </p>
-            <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs font-black text-red-400">
-              <span className="flex items-center gap-1.5"><span>🔱</span> Enter Worldwide Portal</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
-            </div>
-          </button>
+          {/* 🌐 Worldwide Store (Visible ONLY for non-Nepal visitors) */}
+          {!isNepal && (
+            <button
+              onClick={() => selectRegion("worldwide")}
+              className="glass-card p-7 rounded-3xl text-left border border-red-500/30 hover:border-red-500 transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)]"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-purple-600/20 border border-red-500/40 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                🌐
+              </div>
+              <div className="text-xl font-black text-foreground group-hover:text-red-400 transition-colors flex items-center gap-2 font-vedic">
+                Worldwide Store (USD)
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 mb-4 leading-relaxed flex-grow">
+                International store with global pricing in <b>USD ($)</b>. Multi-chain <b>CryptoPay, Bybit, Binance & USDT</b>.
+              </p>
+              <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs font-black text-red-400">
+                <span className="flex items-center gap-1.5"><span>🔱</span> Enter Worldwide Portal</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Remember choice toggle */}
@@ -243,10 +233,14 @@ export default function RegionGatewayPage() {
         <div className="flex items-center gap-6 font-semibold">
           <span className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-red-400" /> 100% Verified Accounts</span>
           <span className="flex items-center gap-1.5"><Zap className="w-4 h-4 text-amber-400" /> Instant Telegram Delivery</span>
-          <span className="flex items-center gap-1.5"><Lock className="w-4 h-4 text-red-400" /> Multi-Chain Crypto & QR</span>
+          <span className="flex items-center gap-1.5">
+            <Lock className="w-4 h-4 text-red-400" /> 
+            {isNepal ? "eSewa & Fonepay Verified QR" : "Multi-Chain Crypto & QR"}
+          </span>
         </div>
         <div className="font-vedic text-red-400/80">© {new Date().getFullYear()} KALI DIGITAL STORE. ALL RIGHTS RESERVED.</div>
       </footer>
     </div>
   );
 }
+

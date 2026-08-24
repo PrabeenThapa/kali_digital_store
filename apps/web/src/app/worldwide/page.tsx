@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '@/lib/api';
+import { detectGeoLocation } from '@/lib/geo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,8 +10,10 @@ import {
   Wallet, Tag, ArrowRight, X, AlertCircle, RefreshCw, Sparkles,
   Sun, Moon, Check, PackageCheck, PackageX, LayoutGrid,
   List, Bolt, Globe, Lock, HeartHandshake, ThumbsUp, Star,
-  MessageSquare, ExternalLink, QrCode, CreditCard
+  MessageSquare, ExternalLink, QrCode, CreditCard,
+  Flame, Bot, Film, Palette, Briefcase, ShieldCheck, Code2, Mail
 } from 'lucide-react';
+
 
 interface Product {
   id: string;
@@ -65,15 +68,30 @@ interface CryptoPaymentMethod {
 }
 
 const AUTO_CATEGORIES = [
-  { id: 'ai',          label: '🤖 AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
-  { id: 'streaming',   label: '🎬 Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
-  { id: 'creative',    label: '🎨 Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
-  { id: 'productivity',label: '💼 Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
-  { id: 'vpn',         label: '🔒 VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
-  { id: 'dev',         label: '🔧 Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
-  { id: 'email',       label: '📧 Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
-  { id: 'other',       label: '✨ Others',             purchases: '180+ Purchases',   keywords: [] },
+  { id: 'ai',          label: 'AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
+  { id: 'streaming',   label: 'Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
+  { id: 'creative',    label: 'Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
+  { id: 'productivity',label: 'Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
+  { id: 'vpn',         label: 'VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
+  { id: 'dev',         label: 'Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
+  { id: 'email',       label: 'Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
+  { id: 'other',       label: 'Others',            purchases: '180+ Purchases',   keywords: [] },
 ];
+
+function getCategoryIcon(id: string, isSelected: boolean = false) {
+  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-500'}`;
+  switch (id) {
+    case 'all': return <Flame className={cls} />;
+    case 'ai': return <Bot className={cls} />;
+    case 'streaming': return <Film className={cls} />;
+    case 'creative': return <Palette className={cls} />;
+    case 'productivity': return <Briefcase className={cls} />;
+    case 'vpn': return <ShieldCheck className={cls} />;
+    case 'dev': return <Code2 className={cls} />;
+    case 'email': return <Mail className={cls} />;
+    default: return <Sparkles className={cls} />;
+  }
+}
 
 function getAutoCategory(productName: string): string {
   const lower = productName.toLowerCase();
@@ -144,7 +162,18 @@ export default function WorldwideStorePage() {
   const [directPaySuccessMsg, setDirectPaySuccessMsg] = useState('');
   const [copiedCryptoAddress, setCopiedCryptoAddress] = useState(false);
 
+  const [isBlockedNepal, setIsBlockedNepal] = useState(false);
+
   useEffect(() => {
+    // Check if visitor is from Nepal - if so, immediately redirect to /nepal
+    detectGeoLocation().then(geo => {
+      if (geo.is_nepal) {
+        setIsBlockedNepal(true);
+        localStorage.setItem('region', 'nepal');
+        router.replace('/nepal');
+      }
+    });
+
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     if (savedTheme === 'light') document.documentElement.classList.add('light-theme');
     else document.documentElement.classList.remove('light-theme');
@@ -153,7 +182,8 @@ export default function WorldwideStorePage() {
     fetchCatalog();
     fetchUser();
     fetchCryptoPaymentMethods();
-  }, []);
+  }, [router]);
+
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -186,12 +216,15 @@ export default function WorldwideStorePage() {
   };
 
   const fetchUser = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
     try {
-      const res = await api.get('/user/me');
-      if (res.data) setUser(res.data);
-    } catch { /* ignore */ }
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await api.get('/auth/me');
+      setUser(res.data);
+    } catch {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   const fetchCryptoPaymentMethods = async () => {
@@ -416,9 +449,20 @@ export default function WorldwideStorePage() {
   const inStockCount = useMemo(() => products.filter(p => p.stock > 0).length, [products]);
   const outOfStockCount = useMemo(() => products.filter(p => p.stock === 0).length, [products]);
 
+  if (isBlockedNepal) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-bold text-red-400 mt-4 tracking-widest uppercase">॥ ॐ क्रीं कालिकायै नमः • REDIRECTING TO NEPAL STORE... ॥</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-red-600 selection:text-white">
+
       {/* Top Sacred Mantra Bar */}
+
       <div className="top-mantra-bar w-full bg-gradient-to-r from-red-950/80 via-red-900/40 to-red-950/80 border-b border-red-500/20 py-1.5 px-4 text-center">
         <p className="text-[10px] font-bold text-red-400 tracking-widest font-vedic uppercase flex items-center justify-center gap-2">
           <span>🔱</span>
@@ -496,8 +540,51 @@ export default function WorldwideStorePage() {
         </div>
       </header>
 
+      {/* ─── Sticky Frozen Category & Status Bar ────────────────────────── */}
+      <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 py-3 shadow-md shadow-black/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                selectedCategory === 'all'
+                  ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                  : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }`}
+            >
+              {getCategoryIcon('all', selectedCategory === 'all')}
+              <span>All Items ({products.length})</span>
+            </button>
+            {AUTO_CATEGORIES.map(cat => {
+              const count = categoryCounts[cat.id] || 0;
+              if (count === 0) return null;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
+                      : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {getCategoryIcon(cat.id, isSelected)}
+                  <span>{cat.label} ({count})</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}>
+                    {cat.purchases}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full">
         {/* Vedic Hero Banner */}
         <div className="hero-banner relative rounded-3xl overflow-hidden p-6 sm:p-10 mb-8 border border-red-500/30 bg-gradient-to-r from-red-950/60 via-red-900/30 to-background shadow-[0_0_50px_rgba(225,29,72,0.15)]">
           <div className="max-w-2xl">
@@ -511,43 +598,6 @@ export default function WorldwideStorePage() {
               Genuine ChatGPT Plus, Claude, Gemini, Canva Pro, JetBrains, VPNs, and Dev API tokens with instant cryptographic delivery and eternal warranty.
             </p>
           </div>
-        </div>
-
-        {/* Categories Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-6 no-scrollbar">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-              selectedCategory === 'all'
-                ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
-                : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
-            }`}
-          >
-            🔥 All Items ({products.length})
-          </button>
-          {AUTO_CATEGORIES.map(cat => {
-            const count = categoryCounts[cat.id] || 0;
-            if (count === 0) return null;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(225,29,72,0.5)] font-extrabold'
-                    : 'bg-secondary/60 border-red-500/20 text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
-              >
-                <span>{cat.label} ({count})</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
-                  isSelected ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {cat.purchases}
-                </span>
-              </button>
-            );
-          })}
         </div>
 
         {/* Filters row */}
