@@ -10,9 +10,10 @@ import {
   Wallet, Tag, ArrowRight, X, AlertCircle, RefreshCw, Sparkles,
   Sun, Moon, Check, PackageCheck, PackageX, LayoutGrid,
   List, Bolt, Globe, Lock, HeartHandshake, ThumbsUp, Star,
-  MessageSquare, ExternalLink, QrCode, CreditCard,
+  MessageSquare, ExternalLink, QrCode, CreditCard, FileText,
   Flame, Bot, Film, Palette, Briefcase, ShieldCheck, Code2, Mail
 } from 'lucide-react';
+import { ProductIcon } from '@/components/ProductIcon';
 
 
 interface Product {
@@ -21,6 +22,7 @@ interface Product {
   name: string;
   description: string;
   price: number;
+  price_npr?: number;
   stock: number;
   image?: string;
   type: string;
@@ -28,6 +30,12 @@ interface Product {
   category_id?: number;
   is_instant?: boolean;
   is_featured?: boolean;
+  is_hot?: boolean;
+  is_bestseller?: boolean;
+  badge_text?: string;
+  auto_delivery?: boolean;
+  delivery_type?: string;
+  account_type?: string;
   rating?: number;
   reviews_count?: number;
 }
@@ -68,19 +76,20 @@ interface CryptoPaymentMethod {
 }
 
 const AUTO_CATEGORIES = [
-  { id: 'ai',          label: 'AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
-  { id: 'streaming',   label: 'Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
-  { id: 'creative',    label: 'Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
-  { id: 'productivity',label: 'Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
-  { id: 'vpn',         label: 'VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
-  { id: 'dev',         label: 'Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
-  { id: 'email',       label: 'Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
-  { id: 'other',       label: 'Others',            purchases: '180+ Purchases',   keywords: [] },
+  { id: 'ai', label: 'AI & ChatBots', purchases: '1,420+ Purchases', keywords: ['chatgpt', 'gpt', 'claude', 'gemini', 'perplexity', 'midjourney', 'cursor', 'copilot', 'openai', 'anthropic', 'deepseek'] },
+  { id: 'streaming', label: 'Streaming', purchases: '890+ Purchases', keywords: ['netflix', 'spotify', 'youtube', 'prime', 'disney', 'hulu', 'hbo', 'crunchyroll', 'apple music', 'tidal'] },
+  { id: 'creative', label: 'Creative Tools', purchases: '640+ Purchases', keywords: ['canva', 'adobe', 'figma', 'envato', 'freepik', 'capcut', 'elementor', 'shutterstock'] },
+  { id: 'productivity', label: 'Productivity', purchases: '520+ Purchases', keywords: ['notion', 'office', 'windows', 'grammarly', 'quillbot', 'linkedin', 'github', 'zoom', 'slack'] },
+  { id: 'vpn', label: 'VPN & Security', purchases: '380+ Purchases', keywords: ['vpn', 'nordvpn', 'expressvpn', 'surfshark', 'kaspersky', 'malwarebytes', 'ipvanish', 'proton'] },
+  { id: 'dev', label: 'Developer APIs', purchases: '460+ Purchases', keywords: ['api', 'token', 'credits', 'key', 'aws', 'digitalocean', 'vps', 'jetbrains', 'replit', 'claude code'] },
+  { id: 'email', label: 'Email & Storage', purchases: '290+ Purchases', keywords: ['gmail', 'google drive', 'onedrive', 'icloud', 'protonmail', 'storage', 'edu email'] },
+  { id: 'other', label: 'Other Software', purchases: '210+ Purchases', keywords: [] },
 ];
 
 function getCategoryIcon(id: string, isSelected: boolean = false) {
-  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-500'}`;
+  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-400'}`;
   switch (id) {
+    case 'featured': return <Star className={cls} />;
     case 'all': return <Flame className={cls} />;
     case 'ai': return <Bot className={cls} />;
     case 'streaming': return <Film className={cls} />;
@@ -102,27 +111,49 @@ function getAutoCategory(productName: string): string {
   return 'other';
 }
 
-function getProductEmoji(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes('chatgpt') || n.includes('gpt')) return '🤖';
-  if (n.includes('claude')) return '🧠';
-  if (n.includes('gemini')) return '✨';
-  if (n.includes('canva') || n.includes('adobe')) return '🎨';
-  if (n.includes('netflix') || n.includes('spotify') || n.includes('youtube')) return '🎬';
-  if (n.includes('cursor') || n.includes('replit') || n.includes('token')) return '⚡';
-  if (n.includes('office') || n.includes('microsoft') || n.includes('linkedin')) return '💼';
-  if (n.includes('vpn') || n.includes('nord')) return '🔒';
-  if (n.includes('figma')) return '📐';
-  if (n.includes('capcut')) return '✂️';
-  return '💎';
+function getProductBadges(p: Product) {
+  // 1. Delivery Mode
+  const isInstant = p.auto_delivery !== false && p.delivery_type !== 'manual';
+  const deliveryBadge = isInstant ? {
+    label: "⚡ Instant Delivery",
+    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    icon: <Zap className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+  } : {
+    label: "⏱️ Manual Dispatch",
+    cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    icon: <FileText className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+  };
+
+  // 2. Account / Key Type
+  const lower = (p.name + " " + (p.description || "")).toLowerCase();
+  let accType = p.account_type || "";
+  let accLabel = "🔑 Pre-Activated";
+  let accCls = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+
+  if (accType === "existing_account" || lower.includes("existing") || lower.includes("upgrade") || lower.includes("own email") || lower.includes("own account") || lower.includes("on your email") || lower.includes("invitation")) {
+    accLabel = "👤 On Your Email";
+    accCls = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+  } else if (accType === "key" || lower.includes("key") || lower.includes("license") || lower.includes("token") || lower.includes("code") || lower.includes("serial")) {
+    accLabel = "🛡️ License Key";
+    accCls = "bg-indigo-500/15 text-indigo-300 border-indigo-500/30";
+  } else if (accType === "invite" || lower.includes("invite") || lower.includes("team invite") || lower.includes("workspace")) {
+    accLabel = "📩 Direct Invite";
+    accCls = "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  } else {
+    accLabel = "🔑 Pre-Activated";
+    accCls = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+  }
+
+  return { deliveryBadge, accBadge: { label: accLabel, cls: accCls } };
 }
+
 
 export default function WorldwideStorePage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('featured');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -301,10 +332,33 @@ export default function WorldwideStorePage() {
     }
   };
 
+  const isProductFeatured = (p: Product) => {
+    return Boolean(p.is_featured || p.is_hot || p.is_bestseller || (p.badge_text && p.badge_text.trim().length > 0));
+  };
+
+  const featuredCount = useMemo(() => {
+    const count = products.filter(isProductFeatured).length;
+    return count > 0 ? count : Math.min(products.length, 24);
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCat = selectedCategory === 'all' || getAutoCategory(p.name) === selectedCategory;
+      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      let matchCat = true;
+      if (selectedCategory === 'featured') {
+        const explicitFeatured = products.filter(isProductFeatured);
+        if (explicitFeatured.length > 0) {
+          matchCat = isProductFeatured(p);
+        } else {
+          matchCat = true;
+        }
+      } else if (selectedCategory === 'all') {
+        matchCat = true;
+      } else {
+        matchCat = getAutoCategory(p.name) === selectedCategory;
+      }
+
       const matchStock =
         stockFilter === 'all' ? true :
         stockFilter === 'in_stock' ? p.stock > 0 :
@@ -462,12 +516,11 @@ export default function WorldwideStorePage() {
     <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-red-600 selection:text-white">
 
       {/* Top Sacred Mantra Bar */}
-
       <div className="top-mantra-bar w-full bg-gradient-to-r from-red-950/80 via-red-900/40 to-red-950/80 border-b border-red-500/20 py-1.5 px-4 text-center">
         <p className="text-[10px] font-bold text-red-400 tracking-widest font-vedic uppercase flex items-center justify-center gap-2">
-          <span>🔱</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
           <span>॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥</span>
-          <span>🔱</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
         </p>
       </div>
 
@@ -487,8 +540,9 @@ export default function WorldwideStorePage() {
                     GLOBAL
                   </span>
                 </span>
-                <span className="text-[10px] text-muted-foreground block -mt-0.5 font-semibold">
-                  ⚡ INSTANT DISPATCH • USD ($)
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1 -mt-0.5 font-semibold">
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                  <span>INSTANT DISPATCH • USD ($)</span>
                 </span>
               </div>
             </Link>
@@ -512,7 +566,8 @@ export default function WorldwideStorePage() {
               href="/nepal"
               className="hidden sm:flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-all shadow-sm"
             >
-              <span>🇳🇵</span> Nepal Store (NPR)
+              <span className="px-1 py-0.2 rounded bg-red-500/20 text-[9px] font-mono font-bold text-red-300">NPR</span>
+              <span>Nepal Store</span>
             </Link>
             <button
               onClick={toggleTheme}
@@ -540,10 +595,46 @@ export default function WorldwideStorePage() {
         </div>
       </header>
 
-      {/* ─── Sticky Frozen Category & Status Bar ────────────────────────── */}
-      <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 py-3 shadow-md shadow-black/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full">
+        {/* Vedic Hero Banner */}
+        <div className="hero-banner relative rounded-3xl overflow-hidden p-6 sm:p-10 mb-6 border border-red-500/30 bg-gradient-to-r from-red-950/60 via-red-900/30 to-background shadow-[0_0_50px_rgba(225,29,72,0.15)]">
+          <div className="max-w-2xl">
+            <span className="hero-badge text-[10px] font-black uppercase tracking-widest text-red-400 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 inline-flex items-center gap-1.5 mb-3">
+              <Shield className="w-3 h-3 text-red-400" />
+              <span>दिव्य गति एवं अचूक सुरक्षा • 100% Automated Instant Delivery</span>
+            </span>
+            <h1 className="hero-title text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-2 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
+              KALI DIGITAL STORE
+            </h1>
+            <p className="hero-desc text-xs sm:text-sm text-muted-foreground leading-relaxed font-medium">
+              Genuine ChatGPT Plus, Claude, Gemini, Canva Pro, JetBrains, VPNs, and Dev API tokens with instant cryptographic delivery and eternal warranty.
+            </p>
+          </div>
+        </div>
+
+        {/* ─── Sticky Frozen Category & Status Bar (Below Hero Banner) ─────────── */}
+        <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 py-3 shadow-md shadow-black/10 -mx-4 sm:-mx-6 px-4 sm:px-6 mb-6">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {/* Tab 1: Featured Picks (Default) */}
+            <button
+              onClick={() => setSelectedCategory('featured')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                selectedCategory === 'featured'
+                  ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)] font-extrabold'
+                  : 'bg-secondary/60 border-amber-500/30 text-amber-300 hover:text-white hover:bg-secondary'
+              }`}
+            >
+              {getCategoryIcon('featured', selectedCategory === 'featured')}
+              <span>Featured Picks ({featuredCount})</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                selectedCategory === 'featured' ? 'bg-black/20 text-black' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                HOT
+              </span>
+            </button>
+
+            {/* Tab 2: All Items */}
             <button
               onClick={() => setSelectedCategory('all')}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
@@ -581,31 +672,13 @@ export default function WorldwideStorePage() {
             })}
           </div>
         </div>
-      </div>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full">
-        {/* Vedic Hero Banner */}
-        <div className="hero-banner relative rounded-3xl overflow-hidden p-6 sm:p-10 mb-8 border border-red-500/30 bg-gradient-to-r from-red-950/60 via-red-900/30 to-background shadow-[0_0_50px_rgba(225,29,72,0.15)]">
-          <div className="max-w-2xl">
-            <span className="hero-badge text-[10px] font-black uppercase tracking-widest text-red-400 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 inline-block mb-3">
-              🔱 दिव्य गति एवं अचूक सुरक्षा • 100% Automated Instant Delivery
-            </span>
-            <h1 className="hero-title text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-2 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
-              KALI DIGITAL STORE
-            </h1>
-            <p className="hero-desc text-xs sm:text-sm text-muted-foreground leading-relaxed font-medium">
-              Genuine ChatGPT Plus, Claude, Gemini, Canva Pro, JetBrains, VPNs, and Dev API tokens with instant cryptographic delivery and eternal warranty.
-            </p>
-          </div>
-        </div>
 
         {/* Filters row */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-full text-xs font-bold">
             <button
               onClick={() => setStockFilter('all')}
-              className={`px-3 py-1.5 rounded-full transition-all ${stockFilter === 'all' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`px-3 py-1.5 rounded-full transition-all ${stockFilter === 'all' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
             >All</button>
             <button
               onClick={() => setStockFilter('in_stock')}
@@ -626,11 +699,11 @@ export default function WorldwideStorePage() {
             <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-lg">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
               ><LayoutGrid className="w-3.5 h-3.5" /></button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
               ><List className="w-3.5 h-3.5" /></button>
             </div>
           </div>
@@ -645,27 +718,30 @@ export default function WorldwideStorePage() {
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-24 glass-card rounded-3xl">
-            <div className="text-5xl mb-4">🔍</div>
+            <div className="w-16 h-16 rounded-full bg-secondary/80 border border-border flex items-center justify-center mx-auto mb-4">
+              <Search className="w-8 h-8 text-muted-foreground" />
+            </div>
             <h3 className="text-lg font-bold text-foreground mb-2">No Products Found</h3>
             <p className="text-muted-foreground text-sm">Try adjusting your search or category filter.</p>
             <button
               onClick={() => { setSearchTerm(''); setSelectedCategory('all'); setStockFilter('all'); }}
-              className="mt-6 px-6 py-2.5 rounded-full text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
+              className="mt-6 px-6 py-2.5 rounded-full text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-all"
             >Clear Filters</button>
           </div>
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filteredProducts.map(product => {
               const productUpvotes = upvotes[product.id] || { count: 18, has_upvoted: false };
+              const { deliveryBadge, accBadge } = getProductBadges(product);
               return (
                 <div
                   key={product.id}
-                  className="glass-card rounded-2xl overflow-hidden flex flex-col group hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_8px_30px_rgba(99,102,241,0.2)] transition-all duration-300 cursor-pointer relative justify-between"
+                  className="glass-card rounded-2xl overflow-hidden flex flex-col group hover:-translate-y-1 hover:border-red-500/40 hover:shadow-[0_8px_30px_rgba(239,68,68,0.2)] transition-all duration-300 cursor-pointer relative justify-between"
                   onClick={() => handleOpenBuyModal(product)}
                 >
                   <div className="relative p-6 pb-4 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                      {getProductEmoji(product.name)}
+                    <div className="w-16 h-16 rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-purple-600/10 to-transparent flex items-center justify-center mb-3 group-hover:scale-110 group-hover:border-red-500/40 transition-all duration-300 shadow-inner">
+                      <ProductIcon name={product.name} size="lg" />
                     </div>
                     
                     <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -673,7 +749,7 @@ export default function WorldwideStorePage() {
                         onClick={(e) => handleUpvote(product.id, e)}
                         className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition-all border ${
                           productUpvotes.has_upvoted
-                            ? 'bg-primary text-white border-primary'
+                            ? 'bg-red-500 text-white border-red-500'
                             : 'bg-secondary/80 text-muted-foreground hover:text-foreground border-border/60 hover:bg-secondary'
                         }`}
                         title="Upvote item"
@@ -683,18 +759,25 @@ export default function WorldwideStorePage() {
                       </button>
                     </div>
 
-                    <div className="absolute top-3 left-3 flex items-center gap-1">
+                    <div className="absolute top-3 left-3 flex flex-col gap-1 items-start">
                       {product.is_featured && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          ⭐ Featured
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                          <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                          <span>Featured</span>
                         </span>
                       )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${product.is_instant ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' : 'bg-blue-500/15 text-blue-400 border border-blue-500/25'}`}>
-                        {product.is_instant ? '⚡ Instant' : '📋 Manual'}
-                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${deliveryBadge.cls}`}>
+                          {deliveryBadge.icon}
+                          <span>{deliveryBadge.label}</span>
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${accBadge.cls}`}>
+                          <span>{accBadge.label}</span>
+                        </span>
+                      </div>
                     </div>
 
-                    <h3 className="font-extrabold text-sm text-foreground line-clamp-2 mt-4 mb-1 group-hover:text-primary transition-colors">
+                    <h3 className="font-extrabold text-sm text-foreground line-clamp-2 mt-6 mb-1 group-hover:text-red-400 transition-colors">
                       {product.name}
                     </h3>
                     <p className="text-[11px] text-muted-foreground line-clamp-2 mb-3">
@@ -718,7 +801,7 @@ export default function WorldwideStorePage() {
                   <div className="p-4 pt-3 border-t border-border/40 bg-secondary/20 flex items-center justify-between gap-3 mt-auto">
                     <div>
                       <span className="text-[10px] text-muted-foreground block">Global Price</span>
-                      <span className="text-base font-black text-primary">{formatUsd(product.price)}</span>
+                      <span className="text-base font-black text-red-400">{formatUsd(product.price)}</span>
                     </div>
                     {product.stock === 0 ? (
                       <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30">
@@ -727,12 +810,54 @@ export default function WorldwideStorePage() {
                     ) : (
                       <button
                         onClick={() => handleOpenBuyModal(product)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 flex items-center gap-1.5 transition-all"
+                        className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white bg-red-600 hover:bg-red-500 shadow-md shadow-red-600/20 flex items-center gap-1.5 transition-all group-hover:scale-105"
                       >
                         <Bolt className="w-3.5 h-3.5" /> Buy Now
                       </button>
                     )}
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filteredProducts.map(product => {
+              const { deliveryBadge, accBadge } = getProductBadges(product);
+              return (
+                <div
+                  key={product.id}
+                  className="glass-card rounded-xl px-4 py-3 flex items-center gap-4 hover:border-red-500/40 transition-all group cursor-pointer"
+                  onClick={() => handleOpenBuyModal(product)}
+                >
+                  <div className="w-10 h-10 rounded-xl border border-red-500/20 bg-gradient-to-br from-red-500/10 to-amber-500/10 flex items-center justify-center flex-shrink-0 shadow-inner">
+                    <ProductIcon name={product.name} size="sm" />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <div className="font-bold text-sm text-foreground group-hover:text-red-400 transition-colors truncate flex items-center gap-2">
+                      <span>{product.name}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${deliveryBadge.cls}`}>
+                        {deliveryBadge.label}
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${accBadge.cls}`}>
+                        {accBadge.label}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate">{product.description}</div>
+                  </div>
+                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${product.stock > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                    {product.stock > 0 ? 'In Stock' : 'Sold Out'}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-black text-red-400">
+                      {formatUsd(product.price)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleOpenBuyModal(product); }}
+                    disabled={product.stock === 0}
+                    className="flex-shrink-0 px-3 py-1.5 text-white text-xs font-bold rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >Buy</button>
                 </div>
               );
             })}
@@ -751,12 +876,13 @@ export default function WorldwideStorePage() {
 
             {/* Product header */}
             <div className="flex items-center gap-4 mb-5">
-              <div className="w-14 h-14 rounded-2xl border border-primary/30 bg-primary/20 flex items-center justify-center text-3xl flex-shrink-0">
-                {getProductEmoji(activeModalProduct.name)}
+              <div className="w-14 h-14 rounded-2xl border border-primary/30 bg-primary/10 flex items-center justify-center flex-shrink-0 shadow-inner">
+                <ProductIcon name={activeModalProduct.name} size="lg" />
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1">
-                  🌐 Global Order Checkout
+                <div className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Global Order Checkout</span>
                 </div>
                 <h2 className="text-base font-bold leading-snug">{activeModalProduct.name}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{activeModalProduct.description}</p>
@@ -808,20 +934,28 @@ export default function WorldwideStorePage() {
                   onClick={() => setIsDirectTopUpMode(!isDirectTopUpMode)}
                   className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
                 >
-                  {isDirectTopUpMode ? '← Use Wallet Balance' : '⚡ Direct Crypto Deposit'}
+                  {isDirectTopUpMode ? '← Use Wallet Balance' : (
+                    <span className="flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-400" />
+                      <span>Direct Crypto Deposit</span>
+                    </span>
+                  )}
                 </button>
               </div>
 
               {!isDirectTopUpMode ? (
                 <div className="p-3.5 rounded-xl border bg-primary/15 border-primary text-primary">
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-foreground text-xs">💰 USD Wallet Balance</span>
+                    <span className="font-black text-foreground text-xs flex items-center gap-1.5">
+                      <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>USD Wallet Balance</span>
+                    </span>
                     <span className="text-xs font-bold text-primary">{user ? formatUsd(user.balance) : '$0.00'}</span>
                   </div>
                   <span className="text-[11px] text-muted-foreground block mt-0.5">
                     {user && user.balance >= getFinalTotal() 
                       ? '✓ Sufficient balance for 1-click instant delivery' 
-                      : `⚠️ Needs +${formatUsd(Math.max(0, getFinalTotal() - (user?.balance || 0)))} — Top up below to complete.`}
+                      : `Needs +${formatUsd(Math.max(0, getFinalTotal() - (user?.balance || 0)))} — Top up below to complete.`}
                   </span>
                 </div>
               ) : (
@@ -944,8 +1078,8 @@ export default function WorldwideStorePage() {
             ><X className="w-4 h-4" /></button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-2xl">
-                {getProductEmoji(reviewModalProduct.name)}
+              <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-inner">
+                <ProductIcon name={reviewModalProduct.name} size="md" />
               </div>
               <div>
                 <h3 className="font-extrabold text-base text-foreground leading-tight">{reviewModalProduct.name}</h3>
@@ -992,9 +1126,14 @@ export default function WorldwideStorePage() {
               <button
                 type="submit"
                 disabled={isSubmittingReview || !newComment.trim()}
-                className="w-full py-2 bg-primary hover:bg-primary/90 text-white font-extrabold text-xs rounded-xl shadow transition-all disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl font-bold text-xs bg-primary hover:bg-primary/90 text-white disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
               >
-                {isSubmittingReview ? "Publishing..." : "Submit Review ⭐"}
+                {isSubmittingReview ? "Publishing..." : (
+                  <>
+                    <span>Submit Verified Review</span>
+                    <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                  </>
+                )}
               </button>
             </form>
 

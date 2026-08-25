@@ -1,65 +1,134 @@
-# Git files
+# ============================
+# Git
+# ============================
 .git
 .gitignore
 .gitattributes
 
-# Python cache
-__pycache__
+# ============================
+# Python cache & compiled files
+# ============================
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.pyo
 
+# ============================
 # Virtual environments
+# ============================
 venv/
 env/
 ENV/
-.venv
+.venv/
 venv_kalibot/
+__pypackages__/
 
-# IDE
+# ============================
+# IDE & editor files
+# ============================
 .vscode/
 .idea/
+.claude/
+.agents/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# Testing
+# ============================
+# Testing & coverage
+# ============================
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 *.cover
 .hypothesis/
+.tox/
+.nox/
+tests/
+conftest.py
+pytest.ini
 
-# Documentation
-*.md
-docs/
-
-# CI/CD
+# ============================
+# CI/CD & docs
+# ============================
 .github/
 .gitlab-ci.yml
+README.md
+LICENSE
+*.pdf
 
-# Local data (will be mounted as volumes)
+# ============================
+# Local data (mounted as volumes)
+# ============================
 logs/
 data/
 *.log
 
-# Environment files (should be provided separately)
+# ============================
+# Environment files
+# ============================
 .env
 .env.*
 !.env.example
 
-# Docker files
+# ============================
+# Docker files (not needed inside image)
+# ============================
 docker-compose*.yml
 Dockerfile*
 .dockerignore
 
-# Dependencies and Build Directories
+# ============================
+# Node.js / Next.js
+# ============================
 **/node_modules/
-**/node_modules
-node_modules/
 apps/web/.next/
 apps/web/out/
 apps/web/build/
-venv_kalibot/
+apps/web/.npmrc
+
+# ============================
+# Large assets & archives
+# ============================
+*.tar.gz
+*.zip
+*.pdf
+board_preview.png
+emoji_grid.png
+emoji_thumbs/
+bot_deploy.tar.gz
+
+# ============================
+# Scratch / temp / deploy scripts
+# ============================
+scratch/
+deploy_vps*.py
+deploy_vps*.sh
+deploy_to_vps.ps1
+deploy_with_key.py
+fresh_deploy_vps.py
+clean_sync.py
+final_verify_and_sync.py
+export_products.py
+reset_balances.py
+verify_balances.py
+migrate_users.py
+products_list.txt
+seed_products.sql
+
+# ============================
+# Ruff / mypy cache
+# ============================
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+
+# ============================
+# TypeScript build info
+# ============================
+apps/web/tsconfig.tsbuildinfo

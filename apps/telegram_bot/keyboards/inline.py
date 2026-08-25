@@ -68,7 +68,7 @@ async def main_menu(role: int, channel: str | None = None, helper: str | None = 
     kb.row(InlineKeyboardButton(text="Shop", callback_data="shop", style="success", icon_custom_emoji_id=icons.get("shop")))
     
     # Row 2 (Green)
-    kb.row(InlineKeyboardButton(text="Visit Website", url=EnvKeys.WEB_URL or "https://kalidigitalstore.page.gd", style="success", icon_custom_emoji_id=icons.get("visit_website")))
+    kb.row(InlineKeyboardButton(text="Visit Website", url=EnvKeys.WEB_URL or "https://kalidigitalstore.duckdns.org", style="success", icon_custom_emoji_id=icons.get("visit_website")))
     
     # Row 3 (Primary/Purple)
     kb.row(
@@ -92,9 +92,6 @@ async def main_menu(role: int, channel: str | None = None, helper: str | None = 
     else:
         kb.row(InlineKeyboardButton(text="Earn", callback_data="referral_system", style="success", icon_custom_emoji_id=icons.get("earn")))
         
-    # Row 6 (Primary/Purple)
-    kb.row(InlineKeyboardButton(text="Website Login Setup", callback_data="web_login", style="primary", icon_custom_emoji_id=icons.get("website_login_setup")))
-
     # Admin panel (only for admins)
     if Permission.has_any_admin_perm(role):
         kb.row(InlineKeyboardButton(text="Admin Panel", callback_data="console", style="primary", icon_custom_emoji_id=icons.get("admin_panel")))
@@ -119,7 +116,7 @@ def profile_keyboard(referral_percent: int, user_items: int = 0, cart_count: int
     kb.button(text=cart_text, callback_data="cart", style="primary")
     kb.button(text=localize("btn.operation_history"), callback_data="operation_history", style="primary")
     if discount_percent and discount_percent > 0:
-        kb.button(text=f"🏷 Promo Active ({discount_percent}% off)", callback_data="remove_account_discount", style="danger")
+        kb.button(text=f"Promo Active ({discount_percent}% off)", callback_data="remove_account_discount", style="danger")
     else:
         kb.button(text=localize("btn.redeem_promo"), callback_data="redeem_promo", style="success")
     kb.button(text=localize("btn.back"), callback_data="back_to_menu", style="primary")
@@ -131,15 +128,19 @@ def profile_keyboard(referral_percent: int, user_items: int = 0, cart_count: int
 #  ADMIN CONSOLE KEYBOARD
 # ─────────────────────────────────────────────
 
-def admin_console_keyboard(maintenance_mode: bool = False, role: int = 127) -> InlineKeyboardMarkup:
+def admin_console_keyboard(maintenance_mode: bool = False, role: int = 127, auto_delivery: bool = True) -> InlineKeyboardMarkup:
     """Admin panel — shows only buttons the user has permissions for."""
     kb = InlineKeyboardBuilder()
     if role & Permission.CATALOG_MANAGE:
+        auto_text = "Auto-Delivery: ON" if auto_delivery else "Auto-Delivery: OFF"
+        kb.button(text=auto_text, callback_data="toggle_auto_delivery", style="primary")
+        kb.button(text="Pending Web Orders", callback_data="adm_pending_orders", style="primary")
+        kb.button(text="API Budget & Wallets", callback_data="adm_budget_view", style="primary")
         kb.button(text=localize("admin.menu.shop"), callback_data="shop_management", style="primary")
         kb.button(text=localize("admin.menu.goods"), callback_data="goods_management", style="primary")
         kb.button(text=localize("admin.menu.categories"), callback_data="categories_management", style="primary")
-        kb.button(text="🔗 Reseller APIs", callback_data="admin_resellers", style="primary")
-        kb.button(text="💲 Price Manager", callback_data="rs_prices:0", style="primary")
+        kb.button(text="Reseller APIs", callback_data="admin_resellers", style="primary")
+        kb.button(text="Price Manager", callback_data="rs_prices:0", style="primary")
     if role & Permission.PROMO_MANAGE:
         kb.button(text=localize("admin.menu.promo"), callback_data="promo_mgmt", style="primary")
     if role & Permission.USERS_MANAGE:
@@ -148,15 +149,17 @@ def admin_console_keyboard(maintenance_mode: bool = False, role: int = 127) -> I
         kb.button(text=localize("admin.menu.roles"), callback_data="role_mgmt", style="primary")
     if role & Permission.BROADCAST:
         kb.button(text=localize("admin.menu.broadcast"), callback_data="send_message", style="primary")
-        kb.button(text="📢 Auto-Post to Groups", callback_data="manage_discussion_groups", style="primary")
+        kb.button(text="Auto-Post to Groups", callback_data="manage_discussion_groups", style="primary")
     if role & Permission.STATS_VIEW:
-        kb.button(text="📈 Financial Report", callback_data="financial_report", style="primary")
+        kb.button(text="Financial Report", callback_data="financial_report", style="primary")
     if role & Permission.SETTINGS_MANAGE:
         maintenance_key = "admin.menu.maintenance_on" if maintenance_mode else "admin.menu.maintenance_off"
         kb.button(text=localize(maintenance_key), callback_data="toggle_maintenance", style="primary")
-        kb.button(text="🎨 Edit Menu Icons", callback_data="manage_menu_icons", style="primary")
-        kb.button(text="📝 Edit Bot Description", callback_data="edit_bot_desc", style="primary")
-    kb.button(text="🏛️ " + localize("btn.back"), callback_data="back_to_menu", style="primary")
+        kb.button(text="Delivery Message Template", callback_data="adm_delivery_tpl", style="primary")
+        kb.button(text="Toggle Nepal Portal", callback_data="adm_toggle_nepal_cs", style="primary")
+        kb.button(text="Edit Menu Icons", callback_data="manage_menu_icons", style="primary")
+        kb.button(text="Edit Bot Description", callback_data="edit_bot_desc", style="primary")
+    kb.button(text=localize("btn.back"), callback_data="back_to_menu", style="primary")
     kb.adjust(1)
     return kb.as_markup()
 

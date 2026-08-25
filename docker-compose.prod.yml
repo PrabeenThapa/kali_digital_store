@@ -14,24 +14,38 @@ services:
     depends_on:
       - web
       - api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-KaliRedis_2026}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     mem_limit: 64m
     memswap_limit: 128m
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-KaliRedis_2026}", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
 
   db:
-    image: postgres:16
-    command: postgres -c shared_buffers=32MB -c work_mem=2MB -c max_connections=30 -c autovacuum=off
+    image: postgres:16-alpine
+    command: >
+      postgres
+        -c shared_buffers=32MB
+        -c work_mem=2MB
+        -c max_connections=30
+        -c autovacuum=off
+        -c wal_level=minimal
+        -c max_wal_senders=0
+        -c synchronous_commit=off
     mem_limit: 128m
     memswap_limit: 256m
     environment:
@@ -41,41 +55,49 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shop_user} -d ${POSTGRES_DB:-telegram_shop}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shop_user} -d ${POSTGRES_DB:-telegram_shop}"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
   bot:
-    build: .
-    mem_limit: 128m
-    memswap_limit: 256m
+    build:
+      context: .
+      dockerfile: Dockerfile
+    mem_limit: 144m
+    memswap_limit: 288m
     env_file:
       - .env
     environment:
       POSTGRES_HOST: db
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      ADMIN_HOST: 0.0.0.0
-      ADMIN_PORT: 9090
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      ADMIN_HOST: "0.0.0.0"
+      ADMIN_PORT: "9090"
       BYBIT_UID: ${BYBIT_UID}
+      BYBIT_CHAIN: ${BYBIT_CHAIN:-TRX}
       BINANCE_PAY_ID: ${BINANCE_PAY_ID}
       NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
       SUPPORT_GROUP_ID: ${SUPPORT_GROUP_ID}
+      ALERT_GROUP_ID: ${ALERT_GROUP_ID}
       SAFWAN_API_KEY: ${SAFWAN_API_KEY}
       SAFWAN_BASE_URL: ${SAFWAN_BASE_URL}
       CANBOSO_API_KEY: ${CANBOSO_API_KEY}
       CANBOSO_BASE_URL: ${CANBOSO_BASE_URL}
       GGSOMA_API_KEY: ${GGSOMA_API_KEY}
       GGSOMA_BASE_URL: ${GGSOMA_BASE_URL}
-      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.duckdns.org}
+      LOG_TO_FILE: "1"
+      LOG_TO_STDOUT: "1"
+      DEBUG: "0"
     volumes:
-      - .:/app
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - bot_data:/app/data
+      - bot_logs:/app/logs
+      - ./apps:/app/apps
+      - ./packages:/app/packages
     depends_on:
       db:
         condition: service_healthy
@@ -85,27 +107,38 @@ services:
       - 8.8.8.8
       - 1.1.1.1
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   notify:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m notify_bot
     mem_limit: 96m
     memswap_limit: 192m
-    command: python -m notify_bot
     env_file:
       - .env
     environment:
       POSTGRES_HOST: db
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
       NOTIFY_BOT_TOKEN: ${NOTIFY_BOT_TOKEN}
       BYBIT_UID: ${BYBIT_UID}
       BINANCE_PAY_ID: ${BINANCE_PAY_ID}
-      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.duckdns.org}
+      LOG_TO_FILE: "1"
+      LOG_TO_STDOUT: "1"
     volumes:
-      - .:/app
-      - ./logs:/app/logs
+      - bot_logs:/app/logs
+      - ./apps:/app/apps
+      - ./packages:/app/packages
     depends_on:
       db:
         condition: service_healthy
@@ -117,24 +150,33 @@ services:
     restart: unless-stopped
 
   api:
-    build: .
-    mem_limit: 192m
-    memswap_limit: 384m
+    build:
+      context: .
+      dockerfile: Dockerfile
     command: python run_api.py
+    mem_limit: 128m
+    memswap_limit: 256m
     env_file:
       - .env
     environment:
       POSTGRES_HOST: db
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-shop_user}:${POSTGRES_PASSWORD:-KaliShop_Secure_2026}@db:5432/${POSTGRES_DB:-telegram_shop}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
       BYBIT_UID: ${BYBIT_UID}
+      BYBIT_CHAIN: ${BYBIT_CHAIN:-TRX}
       BINANCE_PAY_ID: ${BINANCE_PAY_ID}
-      WEB_URL: ${WEB_URL:-https://kalidigitalstore.page.gd}
+      WEB_URL: ${WEB_URL:-https://kalidigitalstore.duckdns.org}
+      CORS_ORIGINS: "https://kalidigitalstore.duckdns.org,https://kalidigitalstore.page.gd,http://20.164.209.124"
+      LOG_TO_FILE: "1"
+      LOG_TO_STDOUT: "1"
     volumes:
-      - .:/app
-      - ./logs:/app/logs
+      - bot_logs:/app/logs
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -149,17 +191,26 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-    mem_limit: 192m
-    memswap_limit: 384m
+    mem_limit: 128m
+    memswap_limit: 256m
     environment:
-      PORT: 3000
+      PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      NODE_OPTIONS: "--max-old-space-size=128"
+      NODE_OPTIONS: "--max-old-space-size=112"
       NEXT_PUBLIC_API_URL: "/api"
+      NEXT_TELEMETRY_DISABLED: "1"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   db_data:
   redis_data:
   caddy_data:
   caddy_config:
+  bot_data:
+  bot_logs:

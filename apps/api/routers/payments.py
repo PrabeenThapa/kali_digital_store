@@ -2,7 +2,7 @@ import html
 import httpx
 import logging
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -19,7 +19,9 @@ from packages.database.models import (
 from packages.database.methods.transactions import buy_item_transaction
 from packages.services.reseller import fulfill_reseller_purchase
 from packages.services.email_service import send_order_delivery_email
+from packages.services.geo_service import is_nepal_client
 from packages.config.config import EnvKeys
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
@@ -469,10 +471,14 @@ class CryptoDepositSubmitRequest(BaseModel):
 
 
 @router.get("/crypto-methods")
-async def get_crypto_payment_methods():
+async def get_crypto_payment_methods(raw_request: Request):
     """
     Returns all configured worldwide / USDT payment methods identical to the Telegram Bot.
+    Filtered out (empty list) for visitors originating from Nepal.
     """
+    if await is_nepal_client(raw_request):
+        return []
+
     import os
     bep20_wallet = os.getenv("BEP20_WALLET") or getattr(EnvKeys, "BEP20_WALLET", None) or "0x71C67E3684d00120150d1829eDCE18c0c804f5D7"
     trc20_wallet = os.getenv("TRC20_WALLET") or getattr(EnvKeys, "TRC20_WALLET", None) or "TYDzsYUEpvnYmQk4zGP9sWWcTEd3MiAtW6"
@@ -551,6 +557,7 @@ async def get_crypto_payment_methods():
 @router.post("/deposit/onchain-submit")
 async def submit_onchain_deposit(
     request: CryptoDepositSubmitRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -558,7 +565,14 @@ async def submit_onchain_deposit(
     Process on-chain or internal crypto deposit submission (BEP20, TRC20, Bybit, Binance).
     Attempts on-chain verification if applicable, logs payment, and broadcasts alert to Telegram support.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     tx_hash = request.tx_hash.strip()
+
     if not tx_hash:
         raise HTTPException(status_code=400, detail="Transaction hash / reference ID is required")
         
@@ -656,6 +670,7 @@ async def submit_onchain_deposit(
 @router.post("/deposit/cryptopay")
 async def generate_cryptopay_invoice(
     amount: float,
+    raw_request: Request,
     asset: str = "USDT",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -664,6 +679,12 @@ async def generate_cryptopay_invoice(
     Generate a CryptoPay invoice. Returns invoice_url + invoice_id for polling.
     Accepted assets: TON, USDT, BTC, ETH, SOL, TRX, LTC, BNB
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     if not EnvKeys.CRYPTO_PAY_TOKEN:
         raise HTTPException(status_code=503, detail="CryptoPay is not configured on this server.")
     try:
@@ -701,6 +722,7 @@ async def generate_cryptopay_invoice(
 @router.get("/deposit/cryptopay-check")
 async def check_cryptopay_invoice(
     invoice_id: str,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -708,6 +730,12 @@ async def check_cryptopay_invoice(
     Poll CryptoPay invoice status. If paid, credit user balance and return paid=true.
     Safe to call repeatedly — uses existing payment deduplication.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     if not EnvKeys.CRYPTO_PAY_TOKEN:
         return {"paid": False, "status": "not_configured"}
     try:
@@ -747,6 +775,7 @@ async def check_cryptopay_invoice(
 @router.post("/deposit/bybit-init")
 async def init_bybit_payment(
     request: BybitInitRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -755,6 +784,12 @@ async def init_bybit_payment(
     Returns the Bybit UID, unique amount (base + random cents), and payment UUID for tracking.
     Mirrors the Telegram bot's pay_bybit flow exactly.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     import random, time as _time
     bybit_uid = (EnvKeys.BYBIT_UID or "").strip()
     if not bybit_uid:
@@ -794,6 +829,7 @@ async def init_bybit_payment(
 @router.post("/deposit/bybit-verify")
 async def verify_bybit_payment(
     request: BybitVerifyRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -801,6 +837,12 @@ async def verify_bybit_payment(
     Verify a Bybit UID transfer. Tries direct TX ID lookup first, then amount-matching.
     Credits balance if verified; falls back to pending+manual admin alert if not.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     import time as _time
     from packages.database.methods.transactions import process_payment_with_referral
 
@@ -896,6 +938,7 @@ async def verify_bybit_payment(
 @router.post("/deposit/binance-init")
 async def init_binance_payment(
     request: BinanceInitRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -903,6 +946,12 @@ async def init_binance_payment(
     Initialize a Binance Pay deposit. Generates unique amount + remark code for auto-detection.
     Mirrors the Telegram bot's pay_binance flow exactly.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     import random, string as _string, time as _time
     binance_pay_id = (EnvKeys.BINANCE_PAY_ID or "").strip()
     if not binance_pay_id:
@@ -942,6 +991,7 @@ async def init_binance_payment(
 @router.post("/deposit/binance-verify")
 async def verify_binance_payment(
     request: BinanceVerifyRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -949,6 +999,12 @@ async def verify_binance_payment(
     Try to auto-verify a Binance Pay transfer by scanning recent transactions.
     Credits balance if found; falls back to pending+manual admin alert.
     """
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     from packages.database.methods.transactions import process_payment_with_referral
     from decimal import Decimal as Dec
 
@@ -1040,6 +1096,7 @@ async def verify_binance_payment(
     return {"verified": False, "message": "Transfer submitted! Balance will be credited after admin verification (usually within 15 minutes)."}
 
 
+
 # ─── DIRECT PURCHASE & DEPOSIT ROUTE ALIASES ────────────────────────────────
 
 class DirectPurchaseRequest(BaseModel):
@@ -1084,10 +1141,17 @@ async def purchase_direct(
 @router.post("/deposit/cryptopay-init")
 async def cryptopay_init_deposit(
     request: CryptoPayInitRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Generate CryptoPay / CryptoBot invoice for automatic verification."""
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     amount = max(0.5, float(request.amount_usd))
     try:
         from packages.services.payment import CryptoPayAPI
@@ -1125,10 +1189,17 @@ async def cryptopay_init_deposit(
 @router.post("/deposit/cryptopay-check")
 async def cryptopay_check_deposit(
     request: CryptoPayCheckRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Check status of CryptoPay invoice."""
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     try:
         from packages.services.payment import CryptoPayAPI
         client = CryptoPayAPI()
@@ -1160,15 +1231,23 @@ async def cryptopay_check_deposit(
 @router.post("/deposit/crypto-proof")
 async def submit_crypto_proof(
     request: CryptoProofRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Submit proof for BEP20, TRC20, Bybit, or Binance deposit."""
+    if await is_nepal_client(raw_request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cryptocurrency and USDT payment services are restricted in Nepal due to local regulations."
+        )
+
     onchain_req = CryptoDepositSubmitRequest(
         network=request.chain,
         tx_hash=request.tx_hash,
         amount_usd=request.amount,
         proof_image=request.proof_image
     )
-    return await submit_onchain_deposit(request=onchain_req, db=db, current_user=current_user)
+    return await submit_onchain_deposit(request=onchain_req, raw_request=raw_request, db=db, current_user=current_user)
+
 

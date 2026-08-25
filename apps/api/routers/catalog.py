@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -70,13 +70,20 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
     response = []
 
     # 1. Local Goods
-    query = select(Goods)
+    query = select(Goods).where(Goods.is_active == True)
     if category_id and category_id != 999:
         query = query.where(Goods.category_id == category_id)
         
     result = await db.execute(query)
     local_goods = result.scalars().all()
     
+    # Bulk get stock counts
+    stock_counts_res = await db.execute(
+        select(ItemValues.item_id, func.count(ItemValues.id))
+        .group_by(ItemValues.item_id)
+    )
+    stock_map = {row[0]: row[1] for row in stock_counts_res.all()}
+
     def _get_rating_info(pid: str, pname: str):
         import hashlib
         h = int(hashlib.md5(f"{pid}_{pname}".encode()).hexdigest(), 16)
@@ -86,8 +93,7 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
         return avg_rating, review_count
 
     for p in local_goods:
-        stock_query = await db.execute(select(ItemValues).where(ItemValues.item_id == p.id))
-        stock_count = len(stock_query.scalars().all())
+        stock_count = stock_map.get(p.id, 0)
         r_avg, r_count = _get_rating_info(str(p.id), p.name)
         
         response.append({
@@ -95,13 +101,21 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
             "raw_id": p.id,
             "name": p.name,
             "description": p.description or "Instant Delivery Digital Good",
-            "price": float(p.price),
+            "price": float(p.price or 0.0),
+            "price_npr": float(p.price_npr) if getattr(p, "price_npr", None) is not None else None,
             "stock": stock_count,
             "image": getattr(p, "banner_file_id", None),
             "type": "local",
             "category_id": p.category_id,
             "is_instant": True,
             "is_featured": bool(getattr(p, "is_featured", False)),
+            "is_hot": bool(getattr(p, "is_hot", False)),
+            "is_bestseller": bool(getattr(p, "is_bestseller", False)),
+            "badge_text": getattr(p, "badge_text", None),
+            "is_active": bool(getattr(p, "is_active", True)),
+            "auto_delivery": bool(getattr(p, "auto_delivery", True)),
+            "delivery_type": getattr(p, "delivery_type", "instant") or "instant",
+            "account_type": getattr(p, "account_type", "preactivated") or "preactivated",
             "rating": r_avg,
             "reviews_count": r_count,
         })
@@ -115,15 +129,23 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
         )
         rows = reseller_query.all()
         for p, src in rows:
-            desc = p.description if p.description and len(p.description.strip()) > 5 else f"⚡ Instant Delivery • 100% Genuine {p.name} with Full Replacement Warranty."
+            name_str = getattr(p, "effective_name", None) or p.name
+            desc = getattr(p, "effective_description", None) or p.description
+            if not desc or len(desc.strip()) < 5:
+                desc = f"⚡ Instant Delivery • 100% Genuine {name_str} with Full Replacement Warranty."
             real_stock = p.stock if p.stock is not None else 999
-            r_avg, r_count = _get_rating_info(str(p.id), p.name)
+            r_avg, r_count = _get_rating_info(str(p.id), name_str)
+            try:
+                price_val = float(getattr(p, "effective_sell_price", 0.0) or p.sell_price or p.cost_price or 0.0)
+            except Exception:
+                price_val = float(p.sell_price or p.cost_price or 0.0)
             response.append({
                 "id": f"reseller_{p.id}",
                 "raw_id": p.id,
-                "name": p.name,
+                "name": name_str,
                 "description": desc,
-                "price": float(p.sell_price or p.cost_price or 0.0),
+                "price": price_val,
+                "price_npr": float(p.price_npr) if getattr(p, "price_npr", None) is not None else None,
                 "stock": real_stock,
                 "image": None,
                 "type": "reseller",
@@ -131,6 +153,13 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
                 "category_id": 999,
                 "is_instant": p.product_type in ("account", "stock", "digital"),
                 "is_featured": bool(getattr(p, "is_featured", False)),
+                "is_hot": bool(getattr(p, "is_hot", False)),
+                "is_bestseller": bool(getattr(p, "is_bestseller", False)),
+                "badge_text": getattr(p, "badge_text", None),
+                "is_active": bool(getattr(p, "is_enabled", True)),
+                "auto_delivery": bool(getattr(p, "auto_delivery", True)),
+                "delivery_type": getattr(p, "delivery_type", "instant") or "instant",
+                "account_type": getattr(p, "account_type", "preactivated") or "preactivated",
                 "rating": r_avg,
                 "reviews_count": r_count,
             })
@@ -139,6 +168,7 @@ async def get_products(category_id: int = None, db: AsyncSession = Depends(get_d
 
 
 @router.get("/featured")
+@router.get("/products/featured")
 async def get_featured_products(db: AsyncSession = Depends(get_db)):
     """
     Get all items marked as 'Featured' by Admin for display on the Dashboard.
@@ -160,12 +190,19 @@ async def get_featured_products(db: AsyncSession = Depends(get_db)):
             "name": p.name,
             "description": p.description or "Premium Instant Delivery Digital Item",
             "price": float(p.price),
+            "price_npr": float(p.price_npr) if getattr(p, "price_npr", None) is not None else None,
             "stock": stock_count,
             "image": getattr(p, "banner_file_id", None),
             "type": "local",
             "category_id": p.category_id,
             "is_instant": True,
             "is_featured": True,
+            "is_hot": bool(getattr(p, "is_hot", False)),
+            "is_bestseller": bool(getattr(p, "is_bestseller", False)),
+            "badge_text": getattr(p, "badge_text", None),
+            "auto_delivery": bool(getattr(p, "auto_delivery", True)),
+            "delivery_type": getattr(p, "delivery_type", "instant") or "instant",
+            "account_type": getattr(p, "account_type", "preactivated") or "preactivated",
         })
 
     # 2. Reseller Featured Products
@@ -175,19 +212,34 @@ async def get_featured_products(db: AsyncSession = Depends(get_db)):
     )).scalars().all()
 
     for rp in reseller_featured:
+        name_str = getattr(rp, "effective_name", None) or rp.name
+        desc = getattr(rp, "effective_description", None) or rp.description
+        if not desc or len(desc.strip()) < 5:
+            desc = f"Featured • {rp.product_type.replace('_', ' ').title() if rp.product_type else 'Digital Product'}"
+        try:
+            price_val = float(getattr(rp, "effective_sell_price", 0.0) or rp.sell_price or rp.cost_price or 0.0)
+        except Exception:
+            price_val = float(rp.sell_price or rp.cost_price or 0.0)
         featured.append({
             "id": f"reseller_{rp.id}",
             "raw_id": rp.id,
-            "name": rp.name,
-            "description": rp.description or f"Featured • {rp.product_type.replace('_', ' ').title() if rp.product_type else 'Digital Product'}",
-            "price": float(rp.sell_price or rp.cost_price or 0.0),
-            "stock": 999,
+            "name": name_str,
+            "description": desc,
+            "price": price_val,
+            "price_npr": float(rp.price_npr) if getattr(rp, "price_npr", None) is not None else None,
+            "stock": rp.stock if rp.stock is not None else 999,
             "image": None,
             "type": "reseller",
             "source": "digital",
             "category_id": 999,
             "is_instant": True,
             "is_featured": True,
+            "is_hot": bool(getattr(rp, "is_hot", False)),
+            "is_bestseller": bool(getattr(rp, "is_bestseller", False)),
+            "badge_text": getattr(rp, "badge_text", None),
+            "auto_delivery": bool(getattr(rp, "auto_delivery", True)),
+            "delivery_type": getattr(rp, "delivery_type", "instant") or "instant",
+            "account_type": getattr(rp, "account_type", "preactivated") or "preactivated",
         })
 
     # 3. Fallback to top in-stock products if nothing is explicitly featured yet
@@ -202,12 +254,16 @@ async def get_featured_products(db: AsyncSession = Depends(get_db)):
                 "name": p.name,
                 "description": p.description or "Top Recommended Digital Good",
                 "price": float(p.price),
+                "price_npr": float(p.price_npr) if getattr(p, "price_npr", None) is not None else None,
                 "stock": stock_count,
                 "image": getattr(p, "banner_file_id", None),
                 "type": "local",
                 "category_id": p.category_id,
                 "is_instant": True,
                 "is_featured": False,
+                "auto_delivery": bool(getattr(p, "auto_delivery", True)),
+                "delivery_type": getattr(p, "delivery_type", "instant") or "instant",
+                "account_type": getattr(p, "account_type", "preactivated") or "preactivated",
             })
 
     return featured
@@ -240,7 +296,11 @@ async def get_product(product_id: str, db: AsyncSession = Depends(get_db)):
             "is_instant": p.product_type == "account",
         }
 
-    raw_id = int(product_id.replace("local_", ""))
+    try:
+        raw_id = int(product_id.replace("local_", ""))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="Invalid product ID")
+
     result = await db.execute(select(Goods).where(Goods.id == raw_id))
     product = result.scalar_one_or_none()
     if not product:

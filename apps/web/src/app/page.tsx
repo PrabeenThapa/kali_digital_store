@@ -64,9 +64,9 @@ export default function RegionGatewayPage() {
       {/* Top Sacred Mantra Bar */}
       <div className="top-mantra-bar w-full bg-gradient-to-r from-red-950/80 via-red-900/40 to-red-950/80 border-b border-red-500/20 py-1.5 px-4 text-center">
         <p className="text-[11px] font-bold text-red-400 tracking-widest font-vedic uppercase flex items-center justify-center gap-2">
-          <span>🔱</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
           <span>॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥</span>
-          <span>🔱</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
         </p>
       </div>
 
@@ -168,7 +168,7 @@ export default function RegionGatewayPage() {
 
         {/* Region Gateway Cards (Crypto/Worldwide hidden for Nepal visitors) */}
         <div className={`grid grid-cols-1 ${isNepal ? 'max-w-md' : 'md:grid-cols-2 max-w-2xl'} gap-5 w-full mb-6`}>
-          {/* 🇳🇵 Nepal Store */}
+          {/* Nepal Store */}
           <button
             onClick={() => selectRegion("nepal")}
             className="glass-card p-7 rounded-3xl text-left border border-red-500 ring-2 ring-red-500/30 bg-red-500/[0.06] transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)]"
@@ -178,38 +178,44 @@ export default function RegionGatewayPage() {
                 <MapPin className="w-3 h-3" /> Detected Region
               </span>
             )}
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-rose-600/20 border border-red-500/40 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-              🇳🇵
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-rose-600/20 border border-red-500/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-red-400">
+              <QrCode className="w-7 h-7" />
             </div>
             <div className="text-xl font-black text-foreground group-hover:text-red-400 transition-colors flex items-center gap-2 font-vedic">
-              Nepal Store (NPR)
+              <span>Nepal Store (NPR)</span>
             </div>
             <p className="text-xs text-muted-foreground mt-2 mb-4 leading-relaxed flex-grow">
               Direct checkout in <b>Nepali Rupees (NPR)</b> via <b>eSewa, Fonepay, Khalti QR</b> & NPR Wallet. Instant local activation.
             </p>
             <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs font-black text-red-400">
-              <span className="flex items-center gap-1.5"><span>🔱</span> Enter Nepal Portal</span>
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Enter Nepal Portal</span>
+              </span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </button>
 
-          {/* 🌐 Worldwide Store (Visible ONLY for non-Nepal visitors) */}
+          {/* Worldwide Store (Visible ONLY for non-Nepal visitors) */}
           {!isNepal && (
             <button
               onClick={() => selectRegion("worldwide")}
               className="glass-card p-7 rounded-3xl text-left border border-red-500/30 hover:border-red-500 transition-all duration-300 relative group flex flex-col hover:-translate-y-1 hover:shadow-[0_12px_45px_rgba(225,29,72,0.35)]"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-purple-600/20 border border-red-500/40 flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                🌐
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500/20 to-purple-600/20 border border-red-500/40 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-400">
+                <Globe className="w-7 h-7" />
               </div>
               <div className="text-xl font-black text-foreground group-hover:text-red-400 transition-colors flex items-center gap-2 font-vedic">
-                Worldwide Store (USD)
+                <span>Worldwide Store (USD)</span>
               </div>
               <p className="text-xs text-muted-foreground mt-2 mb-4 leading-relaxed flex-grow">
                 International store with global pricing in <b>USD ($)</b>. Multi-chain <b>CryptoPay, Bybit, Binance & USDT</b>.
               </p>
               <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs font-black text-red-400">
-                <span className="flex items-center gap-1.5"><span>🔱</span> Enter Worldwide Portal</span>
+                <span className="flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Enter Worldwide Portal</span>
+                </span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
               </div>
             </button>

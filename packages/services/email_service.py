@@ -17,6 +17,40 @@ SMTP_FROM = EnvKeys._get_optional("SMTP_FROM", "KDS Digital Store <no-reply@kdss
 SMTP_TLS = EnvKeys._get_optional("SMTP_TLS", "1") == "1"
 
 
+def format_delivery_template(
+    template: Optional[str],
+    *,
+    customer_email: str,
+    product_name: str,
+    quantity: int,
+    amount_str: str,
+    delivered_content: str,
+    warranty: str = "",
+    note: str = "",
+    tx_id: str = "",
+) -> str:
+    """Format delivery template replacing all placeholder tags."""
+    if not template or not template.strip():
+        return delivered_content
+
+    rendered = template
+    replacements = {
+        "{customer_email}": customer_email,
+        "{product_name}": product_name,
+        "{quantity}": str(quantity),
+        "{amount}": amount_str,
+        "{credentials}": delivered_content,
+        "{keys}": delivered_content,
+        "{warranty}": warranty or "Standard store warranty",
+        "{note}": note or "Thank you for choosing KDS Digital Store.",
+        "{tx_id}": tx_id,
+        "{support_contact}": "Telegram: @KaliDigitalSupport",
+    }
+    for tag, val in replacements.items():
+        rendered = rendered.replace(tag, str(val))
+    return rendered
+
+
 def generate_order_delivery_html(
     customer_email: str,
     product_name: str,
@@ -25,10 +59,25 @@ def generate_order_delivery_html(
     delivered_content: str,
     order_id: str = "",
     tx_id: Optional[str] = None,
+    custom_template: Optional[str] = None,
+    warranty: str = "",
+    note: str = "",
 ) -> str:
     """
     Generate a modern, responsive HTML email for digital goods delivery.
     """
+    formatted_body = format_delivery_template(
+        custom_template,
+        customer_email=customer_email,
+        product_name=product_name,
+        quantity=quantity,
+        amount_str=amount_str,
+        delivered_content=delivered_content,
+        warranty=warranty,
+        note=note,
+        tx_id=tx_id or "",
+    )
+
     tx_line = f"""
     <tr>
       <td style="padding: 8px 0; color: #888888; font-size: 13px;">Transaction Ref:</td>
@@ -92,7 +141,7 @@ def generate_order_delivery_html(
                     🔑 Delivered Keys / Account Credentials:
                   </div>
                   <div style="background-color: #050811; border: 1px solid #ef4444; border-radius: 16px; padding: 20px; font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #34d399; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-bottom: 25px;">
-{delivered_content}
+{formatted_body}
                   </div>
 
                   <!-- Instructions & Warranty -->
@@ -143,6 +192,9 @@ async def send_order_delivery_email(
     delivered_content: str,
     order_id: str = "",
     tx_id: Optional[str] = None,
+    custom_template: Optional[str] = None,
+    warranty: str = "",
+    note: str = "",
 ) -> bool:
     """
     Asynchronously send an order delivery email to the customer.
@@ -159,13 +211,26 @@ async def send_order_delivery_email(
             msg["From"] = SMTP_FROM
             msg["To"] = customer_email
 
+            # Formatted text
+            formatted_text = format_delivery_template(
+                custom_template,
+                customer_email=customer_email,
+                product_name=product_name,
+                quantity=quantity,
+                amount_str=amount_str,
+                delivered_content=delivered_content,
+                warranty=warranty,
+                note=note,
+                tx_id=tx_id or "",
+            )
+
             # Plain text fallback
             plain_text = (
                 f"KDS DIGITAL STORE - ORDER DELIVERY\n\n"
                 f"Product: {product_name} (x{quantity})\n"
                 f"Amount: {amount_str}\n"
                 f"{f'Transaction Ref: {tx_id}' if tx_id else ''}\n\n"
-                f"Delivered Credentials / Key:\n{delivered_content}\n\n"
+                f"Delivered Credentials / Key:\n{formatted_text}\n\n"
                 f"Access your account dashboard at {EnvKeys.WEB_URL}/dashboard\n"
             )
             msg.attach(MIMEText(plain_text, "plain"))
@@ -179,6 +244,9 @@ async def send_order_delivery_email(
                 delivered_content=delivered_content,
                 order_id=order_id,
                 tx_id=tx_id,
+                custom_template=custom_template,
+                warranty=warranty,
+                note=note,
             )
             msg.attach(MIMEText(html_content, "html"))
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useGeoLocation } from "@/lib/geo";
 import { 
   Flame, Lock, Mail, Send, ShieldCheck, Zap, 
   ArrowRight, RefreshCw, AlertCircle, Globe
@@ -13,6 +14,7 @@ type Tab = "signin" | "signup" | "telegram";
 
 export default function LoginPage() {
   const router = useRouter();
+  const geo = useGeoLocation();
   const [tab, setTab] = useState<Tab>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,11 +25,17 @@ export default function LoginPage() {
   const [region, setRegion] = useState<'worldwide' | 'nepal'>('worldwide');
 
   useEffect(() => {
-    const saved = (localStorage.getItem('region') as 'worldwide' | 'nepal') || 'worldwide';
-    setRegion(saved);
-  }, []);
+    if (geo.is_nepal) {
+      setRegion('nepal');
+      localStorage.setItem('region', 'nepal');
+    } else {
+      const saved = (localStorage.getItem('region') as 'worldwide' | 'nepal') || 'worldwide';
+      setRegion(saved);
+    }
+  }, [geo.is_nepal]);
 
   function handleRegionChange(r: 'worldwide' | 'nepal') {
+    if (geo.is_nepal && r === 'worldwide') return;
     setRegion(r);
     localStorage.setItem('region', r);
   }
@@ -38,11 +46,13 @@ export default function LoginPage() {
   }
 
   function getRedirectPath() {
+    if (geo.is_nepal) return '/nepal';
     const saved = localStorage.getItem('region');
     if (saved === 'nepal') return '/nepal';
     if (saved === 'worldwide') return '/worldwide';
     return '/dashboard';
   }
+
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -110,17 +120,19 @@ export default function LoginPage() {
       {/* Region Switcher */}
       <div className="mb-6 flex items-center gap-2 p-1.5 rounded-full bg-secondary/80 border border-red-500/30 text-xs font-bold shadow-lg">
         <span className="text-muted-foreground pl-3 text-[11px]">Region:</span>
-        <button
-          type="button"
-          onClick={() => handleRegionChange('worldwide')}
-          className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
-            region === 'worldwide'
-              ? 'bg-red-600 text-white font-extrabold shadow-md shadow-red-600/30'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Globe className="w-3.5 h-3.5" /> Worldwide (USD)
-        </button>
+        {!geo.is_nepal && (
+          <button
+            type="button"
+            onClick={() => handleRegionChange('worldwide')}
+            className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+              region === 'worldwide'
+                ? 'bg-red-600 text-white font-extrabold shadow-md shadow-red-600/30'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" /> Worldwide (USD)
+          </button>
+        )}
         <button
           type="button"
           onClick={() => handleRegionChange('nepal')}
@@ -133,6 +145,7 @@ export default function LoginPage() {
           <span>🇳🇵</span> Nepal (NPR)
         </button>
       </div>
+
 
       {/* Login Card */}
       <div className="glass-card w-full max-w-md rounded-3xl p-8 border border-red-500/30 shadow-[0_0_50px_rgba(225,29,72,0.25)] relative z-10">

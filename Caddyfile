@@ -2,8 +2,8 @@
     email mr.prabinthapa@gmail.com
 }
 
-# 1. Primary Domain with Automatic SSL
-kalidigitalstore.page.gd {
+# Primary DuckDNS Domain with Automatic Let's Encrypt SSL
+kalidigitalstore.duckdns.org {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
@@ -31,7 +31,7 @@ kalidigitalstore.page.gd {
     }
 }
 
-# 2. Direct IP & Port 80 HTTP Access (Does not force SSL on raw IP)
+# Direct IP & Port 80 HTTP Access
 :80 {
     handle /api/* {
         reverse_proxy api:8000

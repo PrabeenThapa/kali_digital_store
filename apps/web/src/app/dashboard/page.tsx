@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useGeoLocation } from '@/lib/geo';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -11,6 +12,7 @@ import {
   UploadCloud, Trash2, ExternalLink, Users, MessageCircle,
   Headphones, CheckCheck
 } from 'lucide-react';
+
 
 interface UserProfile {
   id: number;
@@ -116,6 +118,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [binanceStep, setBinanceStep] = useState<'idle' | 'showing_details' | 'verifying' | 'success' | 'pending'>('idle');
 
+  const geo = useGeoLocation();
   // Region state: 'worldwide' | 'nepal'
   const [region, setRegion] = useState<'worldwide' | 'nepal'>('worldwide');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -123,18 +126,23 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
     fetchNepalQrDetails();
-    fetchCryptoMethods();
 
-    // Initialize Region
-    const savedRegion = (localStorage.getItem('region') as 'worldwide' | 'nepal') || 'worldwide';
-    setRegion(savedRegion);
+    // If geo detects Nepal, strictly lock region to Nepal
+    if (geo.is_nepal) {
+      setRegion('nepal');
+      localStorage.setItem('region', 'nepal');
+    } else {
+      const savedRegion = (localStorage.getItem('region') as 'worldwide' | 'nepal') || 'worldwide';
+      setRegion(savedRegion);
+      fetchCryptoMethods();
+    }
 
     // Initialize Theme
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
     if (savedTheme === 'light') document.documentElement.classList.add('light-theme');
     else document.documentElement.classList.remove('light-theme');
-  }, []);
+  }, [geo.is_nepal]);
 
   // Poll chat messages in real time when support tab is active
   useEffect(() => {
@@ -154,8 +162,9 @@ export default function DashboardPage() {
     else document.documentElement.classList.remove('light-theme');
   };
 
-  const isNepal = region === 'nepal';
+  const isNepal = region === 'nepal' || geo.is_nepal;
   const storePath = isNepal ? '/nepal' : '/worldwide';
+
 
   const formatPrice = (usdPrice: number = 0) => {
     if (isNepal) {
@@ -554,10 +563,13 @@ export default function DashboardPage() {
             <span className="flex items-center gap-1.5 text-foreground">
               {isNepal ? '🇳🇵 Nepal (NPR)' : '🌐 Worldwide (USD)'}
             </span>
-            <Link href="/" className="text-[11px] text-red-400 hover:underline">
-              Change
-            </Link>
+            {!geo.is_nepal && (
+              <Link href="/" className="text-[11px] text-red-400 hover:underline">
+                Change
+              </Link>
+            )}
           </div>
+
           
           <div className="flex items-center gap-3 mb-6 p-3 rounded-2xl bg-card/60 border border-red-500/20">
             <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-black text-base ${isNepal ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-red-600/20 border-red-600/40 text-red-400'}`}>

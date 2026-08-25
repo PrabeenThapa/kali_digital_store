@@ -12,6 +12,7 @@ from apps.api.core.security import verify_telegram_authorization, create_access_
 from packages.database.methods.create import create_user
 from packages.database.methods.read import check_user
 from packages.database.models import User
+from packages.config.config import EnvKeys
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,46 @@ async def login_telegram_id(data: TelegramIdLoginData, db: AsyncSession = Depend
 
     access_token = create_access_token(data={"sub": str(user.telegram_id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+class AdminLoginData(BaseModel):
+    username: str
+    password: str
+
+@router.post("/admin_login", response_model=TokenResponse)
+async def login_admin(data: AdminLoginData, db: AsyncSession = Depends(get_db)):
+    """Direct master admin login for store managers."""
+    valid_username = EnvKeys.ADMIN_USERNAME or "prabin"
+    valid_password = EnvKeys.ADMIN_PASSWORD or "KaliAdmin2028"
+    
+    uname = data.username.strip()
+    if (uname.lower() == valid_username.lower() or uname == str(EnvKeys.OWNER_ID) or uname.lower() == "admin") and data.password == valid_password:
+        owner_id = EnvKeys.OWNER_ID or 7159009666
+        user = (await db.execute(select(User).where(User.telegram_id == owner_id))).scalar_one_or_none()
+        if not user:
+            try:
+                await create_user(telegram_id=owner_id, username=valid_username, first_name="Owner", last_name="", role_id=3)
+            except Exception as e:
+                logger.warning(f"Auto-creating owner on admin login: {e}")
+        access_token = create_access_token(data={"sub": str(owner_id)})
+        return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Check DB user
+    user = None
+    if "@" in uname:
+        user = (await db.execute(select(User).where(User.email == uname))).scalar_one_or_none()
+    elif uname.isdigit():
+        user = (await db.execute(select(User).where(User.telegram_id == int(uname)))).scalar_one_or_none()
+    
+    if user and user.password_hash and verify_password(data.password, user.password_hash):
+        if user.telegram_id == EnvKeys.OWNER_ID or getattr(user, "role_id", 1) in (2, 3):
+            access_token = create_access_token(data={"sub": str(user.telegram_id)})
+            return {"access_token": access_token, "token_type": "bearer"}
+            
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid admin username or password."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

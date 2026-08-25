@@ -2,20 +2,30 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { detectGeoLocation } from "@/lib/geo";
+
 
 export default function StoreRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    const savedRegion = localStorage.getItem("region");
-    if (savedRegion === "nepal") {
-      router.replace("/nepal");
-    } else if (savedRegion === "worldwide") {
-      router.replace("/worldwide");
-    } else {
-      router.replace("/");
-    }
+    detectGeoLocation().then(geo => {
+      if (geo.is_nepal) {
+        localStorage.setItem("region", "nepal");
+        router.replace("/nepal");
+      } else {
+        const savedRegion = localStorage.getItem("region");
+        if (savedRegion === "nepal") {
+          router.replace("/nepal");
+        } else if (savedRegion === "worldwide") {
+          router.replace("/worldwide");
+        } else {
+          router.replace("/");
+        }
+      }
+    });
   }, [router]);
+
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center">

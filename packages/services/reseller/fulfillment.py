@@ -403,3 +403,253 @@ async def deliver_preorder_codes(
             _log.warning("Could not deliver codes to user %s: %s", user_id, exc)
 
     return True
+
+
+async def send_order_stage_alert(
+    *,
+    stage_num: int,
+    stage_title: str,
+    product_name: str,
+    customer_email: str,
+    quantity: int = 1,
+    details: str = "",
+    status_icon: str = "🔄",
+) -> None:
+    """
+    Sends real-time stage progress updates (1 to 4) directly to the Telegram Support/Admin Group.
+    """
+    import httpx
+    if not EnvKeys.TOKEN:
+        return
+
+    chats: list[int | str] = []
+    if EnvKeys.ALERT_GROUP_ID:
+        chats.append(EnvKeys.ALERT_GROUP_ID)
+    if EnvKeys.SUPPORT_GROUP_ID and EnvKeys.SUPPORT_GROUP_ID not in chats:
+        chats.append(EnvKeys.SUPPORT_GROUP_ID)
+    if EnvKeys.OWNER_ID and EnvKeys.OWNER_ID not in chats:
+        chats.append(EnvKeys.OWNER_ID)
+
+    if not chats:
+        return
+
+    text = (
+        f"{status_icon} <b>[STAGE {stage_num}/4] {stage_title}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 <b>Item:</b> {product_name} (x{quantity})\n"
+        f"✉️ <b>Delivery Email:</b> <code>{customer_email or 'N/A'}</code>\n"
+        f"ℹ️ <b>Status Details:</b> {details}\n"
+        f"⏱ <b>Timestamp:</b> {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+    )
+
+    async with httpx.AsyncClient() as client:
+        for chat_id in chats:
+            try:
+                await client.post(
+                    f"https://api.telegram.org/bot{EnvKeys.TOKEN}/sendMessage",
+                    json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+                    timeout=5.0
+                )
+            except Exception as e:
+                _log.debug("Failed to send stage alert to chat %s: %s", chat_id, e)
+
+
+async def execute_auto_delivery_pipeline(
+    *,
+    product_id_str: str,
+    product_name: str,
+    quantity: int,
+    amount_str: str,
+    customer_email: str,
+    user_id: int | None = None,
+    tx_id: str = "",
+    order_id: str = "",
+) -> tuple[bool, str, str]:
+    """
+    Complete end-to-end multi-stage auto-delivery pipeline:
+    1. Checks if auto-delivery is globally and per-item enabled.
+    2. Broadcasts Stage 1: Order Initiated.
+    3. Calls Provider API / Fetches local stock with Stage 2 alert.
+    4. Parses Credentials with Stage 3 alert.
+    5. Applies custom product delivery message template and dispatches email with Stage 4 alert.
+    
+    Returns: (success: bool, credentials_or_error: str, final_status: str)
+    """
+    from packages.database.models.main import BotSettings, Goods, ResellerProduct, ItemValues
+    from packages.services.email_service import send_order_delivery_email
+
+    async with Database().session() as s:
+        # Check global auto delivery setting
+        global_setting = (await s.execute(select(BotSettings).where(BotSettings.key == "global_auto_delivery_enabled"))).scalar_one_or_none()
+        is_global_auto = True if not global_setting else (global_setting.value.lower() != "false" and global_setting.value != "0")
+
+        # Global delivery template fallback
+        global_tpl_setting = (await s.execute(select(BotSettings).where(BotSettings.key == "global_delivery_template"))).scalar_one_or_none()
+        default_template = global_tpl_setting.value if global_tpl_setting else None
+
+        # Check product-level settings
+        item_auto_delivery = True
+        item_template = None
+        warranty = ""
+        note = ""
+
+        is_reseller = product_id_str.startswith("reseller_")
+        raw_id = int(product_id_str.split("_")[1]) if "_" in product_id_str else int(product_id_str)
+
+        if is_reseller:
+            r_prod = (await s.execute(select(ResellerProduct).where(ResellerProduct.id == raw_id))).scalar_one_or_none()
+            if r_prod:
+                item_auto_delivery = bool(r_prod.auto_delivery)
+                item_template = r_prod.delivery_template
+                product_name = r_prod.effective_name
+        else:
+            g_prod = (await s.execute(select(Goods).where(Goods.id == raw_id))).scalar_one_or_none()
+            if g_prod:
+                item_auto_delivery = bool(g_prod.auto_delivery)
+                item_template = g_prod.delivery_template
+                warranty = g_prod.warranty or ""
+                note = g_prod.note or ""
+                product_name = g_prod.name
+
+    # Check if auto delivery allowed
+    if not (is_global_auto and item_auto_delivery):
+        await send_order_stage_alert(
+            stage_num=1,
+            stage_title="ORDER PLACED (MANUAL QUEUE)",
+            product_name=product_name,
+            customer_email=customer_email,
+            quantity=quantity,
+            details="Auto-delivery is disabled for this product/store. Order routed to manual fulfillment queue.",
+            status_icon="⏸️"
+        )
+        return False, "Auto-delivery disabled. Awaiting manual admin fulfillment.", "pending_manual"
+
+    # ── STAGE 1: ORDER INITIATED ──────────────────────────────────────────────
+    await send_order_stage_alert(
+        stage_num=1,
+        stage_title="ORDER INITIATED",
+        product_name=product_name,
+        customer_email=customer_email,
+        quantity=quantity,
+        details=f"Payment verified ({amount_str}). Automated fulfillment pipeline started.",
+        status_icon="📥"
+    )
+
+    # ── STAGE 2: CALLING PROVIDER API / LOCAL STOCK ───────────────────────────
+    await send_order_stage_alert(
+        stage_num=2,
+        stage_title="CONTACTING INVENTORY / API",
+        product_name=product_name,
+        customer_email=customer_email,
+        quantity=quantity,
+        details=f"Querying {'Reseller Provider API' if is_reseller else 'Local Vault Stock'} for {quantity} license(s)...",
+        status_icon="🔄"
+    )
+
+    delivered_codes: list[str] = []
+
+    if is_reseller:
+        # Fulfill via external reseller API
+        async with Database().session() as s:
+            r_prod = (await s.execute(select(ResellerProduct).where(ResellerProduct.id == raw_id))).scalar_one_or_none()
+            if not r_prod:
+                return False, "Reseller product not found in database", "failed"
+            source = await _get_source(r_prod.source_id)
+
+        if not source or not source.is_active:
+            return False, f"Provider source '{source.name if source else 'N/A'}' is currently inactive", "failed"
+
+        try:
+            idempotency = f"order_{order_id or datetime.now(timezone.utc).timestamp()}"
+            if source.name == "forkpixel":
+                api_resp = await _place_forkpixel_order(source, r_prod, quantity, idempotency)
+                raw_acc = api_resp.get("order", {}).get("accounts", [])
+                delivered_codes = [str(a) for a in raw_acc if a]
+            elif source.name == "cgpt":
+                api_resp = await _place_cgpt_order(source, r_prod, quantity, idempotency)
+                delivered_codes = [str(c) for c in api_resp.get("delivered_codes", [])]
+            elif source.name == "safwan":
+                api_resp = await _place_safwan_order(source, r_prod, quantity, idempotency)
+                _, delivered_codes = _parse_safwan_response(api_resp)
+            elif source.name == "canboso":
+                api_resp = await _place_canboso_order(source, r_prod, quantity, idempotency)
+                _, delivered_codes = _parse_canboso_response(api_resp)
+            elif source.name == "ggsoma":
+                api_resp = await _place_ggsoma_order(source, r_prod, quantity, idempotency)
+                _, delivered_codes = _parse_ggsoma_response(api_resp)
+        except Exception as exc:
+            _log.error("Auto-delivery provider API error: %s", exc)
+            await send_order_stage_alert(
+                stage_num=2,
+                stage_title="API FULFILLMENT ERROR",
+                product_name=product_name,
+                customer_email=customer_email,
+                quantity=quantity,
+                details=f"Provider API failed with error: {exc}. Routed to Admin support.",
+                status_icon="⚠️"
+            )
+            return False, f"Provider API Error: {exc}", "failed"
+    else:
+        # Fulfill from local ItemValues stock
+        async with Database().session() as s:
+            items_query = await s.execute(
+                select(ItemValues).where(ItemValues.item_id == raw_id).limit(quantity)
+            )
+            found_items = items_query.scalars().all()
+            for item_val in found_items:
+                delivered_codes.append(item_val.value)
+                if not item_val.is_infinity:
+                    await s.delete(item_val)
+            await s.commit()
+
+    if not delivered_codes:
+        await send_order_stage_alert(
+            stage_num=3,
+            stage_title="AWAITING MANUAL PREORDER PROVISION",
+            product_name=product_name,
+            customer_email=customer_email,
+            quantity=quantity,
+            details="Provider API accepted preorder. Credentials will be dispatched once generated by upstream team.",
+            status_icon="⏳"
+        )
+        return True, "Preorder placed successfully. Credentials pending provider dispatch.", "preorder_placed"
+
+    credentials_str = "\n".join(delivered_codes)
+
+    # ── STAGE 3: CREDENTIALS ACQUIRED ─────────────────────────────────────────
+    await send_order_stage_alert(
+        stage_num=3,
+        stage_title="CREDENTIALS ACQUIRED",
+        product_name=product_name,
+        customer_email=customer_email,
+        quantity=quantity,
+        details=f"Successfully generated {len(delivered_codes)} key(s)/account(s). Preparing custom delivery template.",
+        status_icon="🔑"
+    )
+
+    # ── STAGE 4: EMAIL DISPATCH WITH TEMPLATE ─────────────────────────────────
+    active_template = item_template if item_template else default_template
+    email_success = await send_order_delivery_email(
+        customer_email=customer_email,
+        product_name=product_name,
+        quantity=quantity,
+        amount_str=amount_str,
+        delivered_content=credentials_str,
+        order_id=order_id,
+        tx_id=tx_id,
+        custom_template=active_template,
+        warranty=warranty,
+        note=note,
+    )
+
+    await send_order_stage_alert(
+        stage_num=4,
+        stage_title="ORDER COMPLETED & DELIVERED",
+        product_name=product_name,
+        customer_email=customer_email,
+        quantity=quantity,
+        details=f"Credentials delivered to {customer_email} via SMTP ({'Sent ✓' if email_success else 'Logged'}). Customer can also view in Account Dashboard.",
+        status_icon="✅"
+    )
+
+    return True, credentials_str, "delivered"

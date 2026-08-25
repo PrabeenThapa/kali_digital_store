@@ -87,7 +87,7 @@ class EnvKeys(ABC):
     CHANNEL_ID: Final = _get_optional("CHANNEL_ID", "")
     HELPER_ID: Final = _get_optional("HELPER_ID", "")
     RULES: Final = _get_optional("RULES", "")
-    WEB_URL: Final = _get_optional("WEB_URL", "https://kalidigitalstore.page.gd")  # e.g. https://yoursite.com
+    WEB_URL: Final = _get_optional("WEB_URL", "https://kalidigitalstore.duckdns.org")  # e.g. https://yoursite.com
 
     # Locale & logs
     BOT_LOCALE: Final = _get_optional("BOT_LOCALE", "ru")

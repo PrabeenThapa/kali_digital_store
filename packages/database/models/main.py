@@ -184,27 +184,48 @@ class Goods(Database.BASE):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), unique=True, nullable=False)
     price = Column(Numeric(12, 2), nullable=False)
+    price_npr = Column(Numeric(12, 2), nullable=True)
     cost_price = Column(Numeric(12, 2), nullable=False, default=0)
     description = Column(Text, nullable=False)
     category_id = Column(Integer, ForeignKey('categories.id', ondelete="CASCADE"), nullable=False, index=True)
     warranty = Column(String(50), nullable=True)   # e.g. "3m", "1y", "lifetime"
     note = Column(Text, nullable=True)             # Admin note shown to user
     is_featured = Column(Boolean, nullable=False, default=False, index=True)  # Show in featured section
+    is_hot = Column(Boolean, nullable=False, default=False, server_default='false', index=True)
+    is_bestseller = Column(Boolean, nullable=False, default=False, server_default='false', index=True)
+    badge_text = Column(String(32), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default='true', index=True)
+    auto_delivery = Column(Boolean, nullable=False, default=True, server_default='true', index=True)
+    delivery_template = Column(Text, nullable=True) # Custom template with {product_name}, {credentials}, {warranty}, etc.
+    delivery_type = Column(String(32), nullable=False, default='instant', server_default="'instant'") # 'instant' | 'manual'
+    account_type = Column(String(64), nullable=False, default='preactivated', server_default="'preactivated'") # 'preactivated' | 'existing_account' | 'key' | 'invite'
     icon_custom_emoji_id = Column(String(64), nullable=True) # Telegram custom emoji ID for inline keyboard
     category = relationship("Categories", back_populates="items", lazy='raise')
     values = relationship("ItemValues", back_populates="item", lazy='raise')
 
     def __init__(self, name: str, price, description: str, category_id: int,
-                 warranty: str = None, note: str = None, is_featured: bool = False, cost_price = 0, **kw: Any):
+                 warranty: str = None, note: str = None, is_featured: bool = False, cost_price = 0,
+                 is_hot: bool = False, is_bestseller: bool = False, badge_text: str = None, is_active: bool = True,
+                 price_npr = None, auto_delivery: bool = True, delivery_template: str = None,
+                 delivery_type: str = 'instant', account_type: str = 'preactivated', **kw: Any):
         super().__init__(**kw)
         self.name = name
         self.price = price
+        self.price_npr = price_npr
         self.cost_price = cost_price
         self.description = description
         self.category_id = category_id
         self.warranty = warranty
         self.note = note
         self.is_featured = is_featured
+        self.is_hot = is_hot
+        self.is_bestseller = is_bestseller
+        self.badge_text = badge_text
+        self.is_active = is_active
+        self.auto_delivery = auto_delivery
+        self.delivery_template = delivery_template
+        self.delivery_type = delivery_type
+        self.account_type = account_type
 
 
 class ItemValues(Database.BASE):
@@ -235,6 +256,8 @@ class BoughtGoods(Database.BASE):
     price = Column(Numeric(12, 2), nullable=False)
     cost_price = Column(Numeric(12, 2), nullable=False, default=0)
     buyer_id = Column(BigInteger, ForeignKey('users.telegram_id', ondelete="SET NULL"), nullable=True, index=True)
+    customer_email = Column(String(255), nullable=True)
+    delivery_status = Column(String(32), nullable=False, default='delivered', server_default="'delivered'")
     bought_datetime = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     unique_id = Column(BigInteger, nullable=False, unique=True)
     user_telegram_id = relationship("User", back_populates="user_goods", lazy='raise')
@@ -244,13 +267,15 @@ class BoughtGoods(Database.BASE):
         Index('ix_bought_goods_buyer_datetime', 'buyer_id', 'bought_datetime'),
     )
 
-    def __init__(self, name: str, value: str, price, bought_datetime, unique_id, buyer_id: int = 0, cost_price = 0, **kw: Any):
+    def __init__(self, name: str, value: str, price, bought_datetime, unique_id, buyer_id: int = 0, cost_price = 0, customer_email: str = None, delivery_status: str = 'delivered', **kw: Any):
         super().__init__(**kw)
         self.item_name = name
         self.value = value
         self.price = price
         self.cost_price = cost_price
         self.buyer_id = buyer_id
+        self.customer_email = customer_email
+        self.delivery_status = delivery_status
         self.bought_datetime = bought_datetime
         self.unique_id = unique_id
 
@@ -472,12 +497,21 @@ class ResellerProduct(Database.BASE):
     external_code    = Column(String(128), nullable=True)     # product code (ForkPixel "code" field)
     name             = Column(String(200), nullable=False)
     description      = Column(Text, nullable=True)
+    description_override = Column(Text, nullable=True)
     product_type     = Column(String(32), nullable=False)     # "account" | "preorder" | "team_invite"
     cost_price       = Column(Numeric(12, 4), nullable=False) # wholesale price in USD
     sell_price       = Column(Numeric(12, 2), nullable=True)  # NULL = auto (cost * markup_percent)
+    price_npr        = Column(Numeric(12, 2), nullable=True)  # Explicit NPR price
     markup_percent   = Column(Numeric(5, 2), nullable=False, default=30)
     is_enabled       = Column(Boolean, nullable=False, default=True, index=True)
     is_featured      = Column(Boolean, nullable=False, default=False, index=True)  # Show in featured section
+    is_hot           = Column(Boolean, nullable=False, default=False, index=True)
+    is_bestseller    = Column(Boolean, nullable=False, default=False, index=True)
+    badge_text       = Column(String(32), nullable=True)
+    auto_delivery    = Column(Boolean, nullable=False, default=True, server_default='true', index=True)
+    delivery_template = Column(Text, nullable=True)
+    delivery_type    = Column(String(32), nullable=False, default='instant', server_default="'instant'") # 'instant' | 'manual'
+    account_type     = Column(String(64), nullable=False, default='preactivated', server_default="'preactivated'") # 'preactivated' | 'existing_account' | 'key' | 'invite'
     stock            = Column(Integer, nullable=True)          # NULL = preorder / preorder item
     category_override = Column(String(64), nullable=True)      # NULL = auto-derive from name
     name_override = Column(String(256), nullable=True)
@@ -493,7 +527,9 @@ class ResellerProduct(Database.BASE):
 
     def __init__(self, source_id: int, external_id: str, name: str, product_type: str,
                  cost_price, markup_percent=30, external_code: str = None,
-                 description: str = None, stock: int = None, **kw):
+                 description: str = None, stock: int = None, price_npr = None,
+                 auto_delivery: bool = True, delivery_template: str = None,
+                 delivery_type: str = 'instant', account_type: str = 'preactivated', **kw):
         super().__init__(**kw)
         self.source_id = source_id
         self.external_id = external_id
@@ -504,11 +540,21 @@ class ResellerProduct(Database.BASE):
         self.cost_price = cost_price
         self.markup_percent = markup_percent
         self.stock = stock
+        self.price_npr = price_npr
+        self.auto_delivery = auto_delivery
+        self.delivery_template = delivery_template
+        self.delivery_type = delivery_type
+        self.account_type = account_type
 
     @property
     def effective_name(self) -> str:
         """Returns the overridden name if set, else the API name."""
         return self.name_override if self.name_override else self.name
+
+    @property
+    def effective_description(self) -> str:
+        """Returns the overridden description if set, else API description."""
+        return self.description_override if self.description_override else (self.description or "")
 
     @property
     def effective_sell_price(self) -> float:
@@ -534,6 +580,7 @@ class ResellerOrder(Database.BASE):
     reseller_product_id = Column(Integer, ForeignKey('reseller_products.id'), nullable=True)
     bought_goods_id   = Column(Integer, ForeignKey('bought_goods.id', ondelete='SET NULL'), nullable=True)
     user_id           = Column(BigInteger, ForeignKey('users.telegram_id', ondelete='SET NULL'), nullable=True, index=True)
+    customer_email    = Column(String(255), nullable=True)
     quantity          = Column(Integer, nullable=False, default=1)
     external_order_id = Column(String(256), nullable=True)    # order code/ID returned by API
     status            = Column(String(32), nullable=False, default='pending', index=True)
@@ -551,18 +598,34 @@ class ResellerOrder(Database.BASE):
 
     def __init__(self, source_id: int, user_id: int, quantity: int = 1,
                  reseller_product_id: int = None, bought_goods_id: int = None,
-                 charge_amount=None, **kw):
+                 charge_amount=None, customer_email: str = None, **kw):
         super().__init__(**kw)
         self.source_id = source_id
         self.reseller_product_id = reseller_product_id
         self.bought_goods_id = bought_goods_id
         self.user_id = user_id
+        self.customer_email = customer_email
         self.quantity = quantity
         self.charge_amount = charge_amount
 
 
+class ResellerTopUp(Database.BASE):
+    """Tracks manual or automated balance top-ups into external reseller provider accounts."""
+    __tablename__ = 'reseller_topups'
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    source_id   = Column(Integer, ForeignKey('reseller_sources.id', ondelete='CASCADE'), nullable=False, index=True)
+    amount      = Column(Numeric(12, 4), nullable=False) # e.g. 50.00 USD
+    currency    = Column(String(8), nullable=False, default='USD')
+    payment_method = Column(String(64), nullable=True) # e.g. USDT TRC20, CryptoPay, Card
+    note        = Column(Text, nullable=True)
+    tx_hash     = Column(String(256), nullable=True)
+    created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+    source = relationship("ResellerSource", lazy='joined')
+
+
 class BotSettings(Database.BASE):
-    """Key-value store for global settings like Nepal QR Code and payment details."""
+    """Key-value store for global settings like Nepal QR Code, payment details, and website text."""
     __tablename__ = 'bot_settings'
     key   = Column(String(128), primary_key=True)
     value = Column(Text, nullable=True)

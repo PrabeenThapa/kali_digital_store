@@ -1,22 +1,53 @@
-FROM node:20-alpine
+# ==============================================================================
+# Multi-stage Next.js Dockerfile
+# Stage 1: deps      — install ALL dependencies (prod + dev needed for build)
+# Stage 2: builder   — compile/build the Next.js app
+# Stage 3: runner    — minimal production image (only standalone output)
+# ==============================================================================
 
+# Stage 1: Install dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --ignore-scripts
+
+# Stage 2: Build the application
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install dependencies first (leverages Docker cache)
-COPY package.json package-lock.json* ./
-RUN npm ci
+# Disable Next.js telemetry during build
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
-# Copy the rest of the application files
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the Next.js app
 RUN npm run build
 
-# Expose port 3000
+# Stage 3: Production runner (minimal image)
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create a non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy only the standalone output and static files
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
+
 EXPOSE 3000
 
-# Switch to non-root user
-USER node
+# Set port and hostname from environment (docker-compose will pass these)
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-# Start the application in production mode
-CMD ["npm", "run", "start"]
+# Standalone server.js is the production entrypoint
+CMD ["node", "server.js"]

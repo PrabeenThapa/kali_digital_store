@@ -8,10 +8,12 @@ import {
   Search, CheckCircle2, Copy, Zap, Shield,
   Wallet, Tag, ArrowRight, X, AlertCircle, RefreshCw, Sparkles,
   Sun, Moon, Check, PackageCheck, PackageX, LayoutGrid,
-  List, Bolt, HeartHandshake, QrCode, Globe, Mail,
+  List, Bolt, HeartHandshake, QrCode, Globe, Mail, FileText,
   UploadCloud, ImageIcon, Camera, Trash2, ThumbsUp, Star, MessageSquare,
-  Flame, Bot, Film, Palette, Briefcase, ShieldCheck, Code2
+  Flame, Bot, Film, Palette, Briefcase, ShieldCheck, Code2, Rocket,
+  ChevronDown, ChevronUp, Info, HelpCircle, CreditCard, AlertTriangle
 } from 'lucide-react';
+import { ProductIcon } from '@/components/ProductIcon';
 
 interface Product {
   id: string;
@@ -19,6 +21,7 @@ interface Product {
   name: string;
   description: string;
   price: number;
+  price_npr?: number;
   stock: number;
   image?: string;
   type: string;
@@ -26,6 +29,12 @@ interface Product {
   category_id?: number;
   is_instant?: boolean;
   is_featured?: boolean;
+  is_hot?: boolean;
+  is_bestseller?: boolean;
+  badge_text?: string;
+  auto_delivery?: boolean;
+  delivery_type?: string;
+  account_type?: string;
   rating?: number;
   reviews_count?: number;
 }
@@ -46,19 +55,20 @@ interface PromoDiscount {
 }
 
 const AUTO_CATEGORIES = [
-  { id: 'ai',          label: 'AI & ChatBots',    purchases: '1,420+ Purchases', keywords: ['chatgpt','gpt','claude','gemini','grok','cursor','manus','deepseek','kiro','lovable','codex','openai','perplexity','copilot','mistral','llama'] },
-  { id: 'streaming',   label: 'Streaming',         purchases: '890+ Purchases',   keywords: ['netflix','spotify','youtube','amazon','prime','disney','hulu','twitch','crunchyroll','peacock'] },
-  { id: 'creative',    label: 'Creative Tools',    purchases: '640+ Purchases',   keywords: ['adobe','canva','capcut','meitu','figma','picsart','heygen','pixverse','suno','udio','runway','midjourney','dalle','elevenlabs','gamma','leonardo','openart'] },
-  { id: 'productivity',label: 'Productivity',      purchases: '520+ Purchases',   keywords: ['notion','linkedin','microsoft','office','quillbot','grammarly','wispr','supercut','chatprd','n8n','zapier','make'] },
-  { id: 'vpn',         label: 'VPN & Security',    purchases: '380+ Purchases',   keywords: ['vpn','nordvpn','surfshark','expressvpn','proton','hma','avira'] },
-  { id: 'dev',         label: 'Dev Tools',         purchases: '290+ Purchases',   keywords: ['replit','railway','supabase','warp','posthog','factory','linear','gumloop','granola','magic patterns'] },
-  { id: 'email',       label: 'Email & Accounts',  purchases: '410+ Purchases',   keywords: ['gmail','hotmail','mail','email','inbox'] },
-  { id: 'other',       label: 'Others',            purchases: '180+ Purchases',   keywords: [] },
+  { id: 'ai', label: 'AI & ChatBots', purchases: '1,420+ Purchases', keywords: ['chatgpt', 'gpt', 'claude', 'gemini', 'perplexity', 'midjourney', 'cursor', 'copilot', 'openai', 'anthropic', 'deepseek'] },
+  { id: 'streaming', label: 'Streaming', purchases: '890+ Purchases', keywords: ['netflix', 'spotify', 'youtube', 'prime', 'disney', 'hulu', 'hbo', 'crunchyroll', 'apple music', 'tidal'] },
+  { id: 'creative', label: 'Creative Tools', purchases: '640+ Purchases', keywords: ['canva', 'adobe', 'figma', 'envato', 'freepik', 'capcut', 'elementor', 'shutterstock'] },
+  { id: 'productivity', label: 'Productivity', purchases: '520+ Purchases', keywords: ['notion', 'office', 'windows', 'grammarly', 'quillbot', 'linkedin', 'github', 'zoom', 'slack'] },
+  { id: 'vpn', label: 'VPN & Security', purchases: '380+ Purchases', keywords: ['vpn', 'nordvpn', 'expressvpn', 'surfshark', 'kaspersky', 'malwarebytes', 'ipvanish', 'proton'] },
+  { id: 'dev', label: 'Developer APIs', purchases: '460+ Purchases', keywords: ['api', 'token', 'credits', 'key', 'aws', 'digitalocean', 'vps', 'jetbrains', 'replit', 'claude code'] },
+  { id: 'email', label: 'Email & Storage', purchases: '290+ Purchases', keywords: ['gmail', 'google drive', 'onedrive', 'icloud', 'protonmail', 'storage', 'edu email'] },
+  { id: 'other', label: 'Other Software', purchases: '210+ Purchases', keywords: [] },
 ];
 
-function getCategoryIcon(id: string, isSelected: boolean = false) {
-  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-500'}`;
-  switch (id) {
+function getCategoryIcon(catId: string, isSelected: boolean = false) {
+  const cls = `w-4 h-4 shrink-0 transition-colors ${isSelected ? 'text-white' : 'text-red-400'}`;
+  switch (catId) {
+    case 'featured': return <Star className={cls} />;
     case 'all': return <Flame className={cls} />;
     case 'ai': return <Bot className={cls} />;
     case 'streaming': return <Film className={cls} />;
@@ -80,25 +90,42 @@ function getAutoCategory(productName: string): string {
   return 'other';
 }
 
-function getProductEmoji(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes('chatgpt') || n.includes('gpt')) return '🤖';
-  if (n.includes('claude')) return '🧠';
-  if (n.includes('gemini')) return '💎';
-  if (n.includes('grok')) return '⚡';
-  if (n.includes('cursor')) return '🖱️';
-  if (n.includes('manus')) return '🦾';
-  if (n.includes('deepseek')) return '🔍';
-  if (n.includes('netflix')) return '🎬';
-  if (n.includes('spotify')) return '🎵';
-  if (n.includes('youtube')) return '📺';
-  if (n.includes('adobe')) return '🎨';
-  if (n.includes('canva')) return '🖌️';
-  if (n.includes('capcut')) return '🎞️';
-  if (n.includes('vpn')) return '🔒';
-  if (n.includes('notion')) return '📝';
-  return '✨';
+function getProductBadges(p: Product) {
+  // 1. Delivery Mode
+  const isInstant = p.auto_delivery !== false && p.delivery_type !== 'manual';
+  const deliveryBadge = isInstant ? {
+    label: "⚡ Instant Delivery",
+    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    icon: <Zap className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+  } : {
+    label: "⏱️ Manual Dispatch",
+    cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    icon: <FileText className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+  };
+
+  // 2. Account / Key Type
+  const lower = (p.name + " " + (p.description || "")).toLowerCase();
+  let accType = p.account_type || "";
+  let accLabel = "🔑 Pre-Activated";
+  let accCls = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+
+  if (accType === "existing_account" || lower.includes("existing") || lower.includes("upgrade") || lower.includes("own email") || lower.includes("own account") || lower.includes("on your email") || lower.includes("invitation")) {
+    accLabel = "👤 On Your Email";
+    accCls = "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+  } else if (accType === "key" || lower.includes("key") || lower.includes("license") || lower.includes("token") || lower.includes("code") || lower.includes("serial")) {
+    accLabel = "🛡️ License Key";
+    accCls = "bg-indigo-500/15 text-indigo-300 border-indigo-500/30";
+  } else if (accType === "invite" || lower.includes("invite") || lower.includes("team invite") || lower.includes("workspace")) {
+    accLabel = "📩 Direct Invite";
+    accCls = "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  } else {
+    accLabel = "🔑 Pre-Activated";
+    accCls = "bg-purple-500/15 text-purple-300 border-purple-500/30";
+  }
+
+  return { deliveryBadge, accBadge: { label: accLabel, cls: accCls } };
 }
+
 
 export default function NepalStorePage() {
   const router = useRouter();
@@ -106,11 +133,15 @@ export default function NepalStorePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('featured');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [user, setUser] = useState<UserProfile | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [publicSettings, setPublicSettings] = useState<any>(null);
+  const [isDisclaimerExpanded, setIsDisclaimerExpanded] = useState(false);
+  const [isPricingInfoExpanded, setIsPricingInfoExpanded] = useState(false);
+  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
 
   // Modal states
   const [activeModalProduct, setActiveModalProduct] = useState<Product | null>(null);
@@ -144,7 +175,15 @@ export default function NepalStorePage() {
     fetchCatalog();
     fetchUser();
     fetchNepalQrDetails();
+    fetchPublicSettings();
   }, []);
+
+  const fetchPublicSettings = async () => {
+    try {
+      const res = await api.get('/settings/public');
+      if (res.data) setPublicSettings(res.data);
+    } catch { /* empty */ }
+  };
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -187,10 +226,33 @@ export default function NepalStorePage() {
     } catch { /* empty */ }
   };
 
+  const isProductFeatured = (p: Product) => {
+    return Boolean(p.is_featured || p.is_hot || p.is_bestseller || (p.badge_text && p.badge_text.trim().length > 0));
+  };
+
+  const featuredCount = useMemo(() => {
+    const count = products.filter(isProductFeatured).length;
+    return count > 0 ? count : Math.min(products.length, 24);
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCat = selectedCategory === 'all' || getAutoCategory(p.name) === selectedCategory;
+      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      let matchCat = true;
+      if (selectedCategory === 'featured') {
+        const explicitFeatured = products.filter(isProductFeatured);
+        if (explicitFeatured.length > 0) {
+          matchCat = isProductFeatured(p);
+        } else {
+          matchCat = true;
+        }
+      } else if (selectedCategory === 'all') {
+        matchCat = true;
+      } else {
+        matchCat = getAutoCategory(p.name) === selectedCategory;
+      }
+
       const matchStock =
         stockFilter === 'all' ? true :
         stockFilter === 'in_stock' ? p.stock > 0 :
@@ -417,11 +479,25 @@ export default function NepalStorePage() {
       {/* Top Sacred Mantra Bar */}
       <div className="top-mantra-bar w-full bg-gradient-to-r from-red-950/80 via-red-900/40 to-red-950/80 border-b border-red-500/20 py-1.5 px-4 text-center">
         <p className="text-[10px] font-bold text-red-400 tracking-widest font-vedic uppercase flex items-center justify-center gap-2">
-          <span>🔱</span>
-          <span>॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥</span>
-          <span>🔱</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <span>{publicSettings?.mantra_bar_text || "॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥"}</span>
+          <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
         </p>
       </div>
+
+      {/* Broadcast Announcement Banner */}
+      {publicSettings?.announcement_banner_enabled && publicSettings?.announcement_banner_text && (
+        <div className={`w-full py-2 px-4 text-center text-xs font-semibold flex items-center justify-center gap-2 border-b animate-in slide-in-from-top ${
+          publicSettings.announcement_banner_type === "warning"
+            ? "bg-amber-950/90 text-amber-200 border-amber-500/40"
+            : publicSettings.announcement_banner_type === "success"
+            ? "bg-emerald-950/90 text-emerald-200 border-emerald-500/40"
+            : "bg-purple-950/90 text-purple-200 border-purple-500/40"
+        }`}>
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>{publicSettings.announcement_banner_text}</span>
+        </div>
+      )}
 
       {/* Ambient background glows */}
       <div className="fixed top-0 left-0 w-[600px] h-[600px] rounded-full bg-red-600/10 blur-[160px] pointer-events-none -translate-x-1/2 -translate-y-1/2" />
@@ -441,7 +517,8 @@ export default function NepalStorePage() {
                 KALI DIGITAL STORE
               </span>
               <span className="text-[9px] font-bold text-red-400 mt-0.5 flex items-center gap-1">
-                🇳🇵 NEPAL PORTAL (NPR)
+                <span className="px-1 py-0.2 rounded bg-red-500/20 text-[8px] font-mono font-bold text-red-300">NPR</span>
+                <span>NEPAL PORTAL</span>
               </span>
             </div>
           </Link>
@@ -467,7 +544,7 @@ export default function NepalStorePage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/70 border border-red-500/30 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
             >
               <Globe className="w-3.5 h-3.5 text-red-400" />
-              <span>🇳🇵 Nepal (NPR)</span>
+              <span>Nepal (NPR)</span>
             </Link>
 
             {/* Theme toggle */}
@@ -511,65 +588,187 @@ export default function NepalStorePage() {
 
       {/* ─── Nepal Store Coming Soon Announcement Banner ─────────────────────── */}
       {nepalQrData?.coming_soon && (
-        <div className="w-full bg-gradient-to-r from-amber-950/90 via-red-950/80 to-amber-950/90 border-b border-amber-500/40 p-4 sm:p-5 text-center animate-in slide-in-from-top-4 duration-300 relative z-30">
-          <div className="max-w-4xl mx-auto flex items-center justify-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400 font-extrabold text-xl shadow-lg shadow-amber-500/10">
-              🚀
+        <div className="w-full bg-gradient-to-r from-amber-950/90 via-red-950/80 to-amber-950/90 border-b border-amber-500/40 p-4 sm:p-5 animate-in slide-in-from-top-4 duration-300 relative z-30">
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400 shadow-lg shadow-amber-500/10">
+              <Rocket className="w-5 h-5" />
             </div>
-            <div>
+            <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  🇳🇵 NEPAL STORE • COMING SOON
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <span className="px-1 py-0.2 rounded bg-amber-500/30 text-[8px] font-bold">NPR</span>
+                  <span>NEPAL STORE • COMING SOON</span>
                 </span>
               </div>
               <p className="text-xs font-semibold text-amber-100/90 mt-1 leading-relaxed">
-                {nepalQrData.coming_soon_text || "🇳🇵 Nepal Store Direct Local Payment Gateway & Catalog Expansion is Coming Soon! Stay tuned as we roll out instant eSewa & Khalti automated API verification."}
+                {nepalQrData.coming_soon_text || "Nepal Store Direct Local Payment Gateway & Catalog Expansion is Coming Soon! Stay tuned as we roll out instant eSewa & Khalti automated API verification."}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── Nepal Exclusive Hero Banner ───────────────────────────────── */}
-      <section className="hero-banner relative overflow-hidden border-b border-red-500/20 bg-gradient-to-r from-red-950/60 via-red-900/30 to-background shadow-[0_0_50px_rgba(225,29,72,0.15)]">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-12 md:py-16 text-center">
-          <div className="hero-badge inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-red-500/40 bg-red-500/10 text-red-400 text-xs font-black mb-4 shadow-md uppercase tracking-wider">
-            <span>🔱</span>
-            <span>नेपाल आधिकारिक डिजिटल स्टोर • eSewa, Fonepay & Khalti Direct</span>
-            <span>🔱</span>
+      {/* ─── Redesigned Premium Nepali Hero Section ───────────────────────── */}
+      <section className="hero-banner relative overflow-hidden border-b border-red-500/20 bg-gradient-to-b from-red-950/40 via-background to-background py-10 md:py-14 shadow-[0_0_50px_rgba(225,29,72,0.1)]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center relative z-10">
+          
+          {/* 1. Student / Young Developer Initiative Badge */}
+          <div className="inline-flex flex-col items-center mb-4">
+            <button
+              onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-red-500/30 bg-red-500/10 hover:bg-red-500/15 text-red-300 text-[11px] font-semibold transition-all shadow-sm group"
+            >
+              <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-[9px] font-mono font-bold text-red-300">NPR</span>
+              <span>नेपाली युवा प्रविधि उत्साहीहरूको स्वतन्त्र पहल</span>
+              <ChevronDown className={`w-3 h-3 text-red-400 transition-transform duration-200 ${isAboutExpanded ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {isAboutExpanded && (
+              <div className="mt-2.5 p-3 rounded-2xl bg-secondary/90 border border-red-500/30 text-xs text-muted-foreground max-w-lg animate-in fade-in slide-in-from-top-2 duration-200 text-center leading-relaxed shadow-lg">
+                नेपालका विद्यार्थी तथा युवा प्रविधि उत्साहीहरूले विकास तथा सञ्चालन गरेको ग्राहक-केन्द्रित डिजिटल सेवा।
+              </div>
+            )}
           </div>
-          <h1 className="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight mb-4 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
-            KALI DIGITAL STORE NEPAL<br />
-            <span className="text-2xl sm:text-4xl text-red-500">⚡ क्षणभर में प्राप्ति • काल-चक्र वॉरंटी</span>
+
+          {/* 2. Main Brand Title */}
+          <h1 className="hero-title text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight mb-2 font-vedic text-transparent bg-clip-text bg-gradient-to-r from-white via-red-200 to-red-500">
+            KALI DIGITAL STORE NEPAL
           </h1>
-          <p className="hero-desc text-muted-foreground max-w-xl mx-auto mb-7 text-xs sm:text-sm font-medium">
-            ChatGPT Plus, Gemini Pro, Claude 3.7, Canva Pro, Netflix, VPNs & Dev API Keys. Pay seamlessly in Nepali Rupees (NPR) with instant credentials dispatch.
+
+          {/* 3. Refined Tagline */}
+          <div className="text-base sm:text-xl font-bold text-red-400 mb-4 tracking-wide font-sans">
+            छिटो सेवा • भरपर्दो सहयोग • स्पष्ट जानकारी
+          </div>
+
+          {/* 4. Natural Nepali Product Intro */}
+          <p className="hero-desc text-muted-foreground max-w-2xl mx-auto mb-6 text-xs sm:text-sm font-medium leading-relaxed">
+            <span className="text-foreground font-semibold">ChatGPT, Gemini, Claude, Canva, Netflix, VPN</span> तथा अन्य लोकप्रिय डिजिटल सेवाहरू नेपाली रुपैयाँमै सहज रूपमा उपलब्ध। खरिदपछि आवश्यक विवरण तथा सक्रियताका लागि सहयोग प्राप्त गर्नुहोस्।
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground mb-6 font-semibold">
-            <div className="flex items-center gap-1.5"><QrCode className="w-3.5 h-3.5 text-red-400" /> eSewa / Fonepay Direct QR</div>
-            <div className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-amber-400" /> Instant Activation</div>
-            <div className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-red-400" /> 100% Replacement Warranty</div>
-            <div className="flex items-center gap-1.5"><HeartHandshake className="w-3.5 h-3.5 text-emerald-400" /> 24/7 Nepali Live Support</div>
+
+          {/* 5. Trust & Payment Chips */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs mb-7 font-semibold">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 border border-border/80 text-foreground shadow-sm">
+              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>छिटो सक्रियता</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 border border-border/80 text-foreground shadow-sm">
+              <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>eSewa • Khalti • Fonepay</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 border border-border/80 text-foreground shadow-sm">
+              <HeartHandshake className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>नेपाली ग्राहक सहायता</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-secondary/60 border border-border/80 text-foreground shadow-sm">
+              <RefreshCw className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>सर्तअनुसार प्रतिस्थापन सुविधा</span>
+            </div>
+          </div>
+
+          {/* 6. Expandable Transparency & Pricing Info Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto mb-6 text-left">
+            {/* Card 1: महत्वपूर्ण सूचना (Transparency Notice) */}
+            <div className="rounded-2xl border border-red-500/20 bg-secondary/30 backdrop-blur-sm overflow-hidden transition-all">
+              <button
+                type="button"
+                onClick={() => setIsDisclaimerExpanded(!isDisclaimerExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <span>महत्वपूर्ण सूचना</span>
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${isDisclaimerExpanded ? 'rotate-180' : ''}`} />
+              </button>
+              {isDisclaimerExpanded && (
+                <div className="px-4 pb-3.5 text-[11px] text-muted-foreground leading-relaxed border-t border-border/40 pt-2.5 animate-in fade-in duration-200 space-y-1.5">
+                  <p>
+                    <b className="text-foreground">KALI DIGITAL STORE</b> सम्बन्धित सेवा प्रदायकहरूको आधिकारिक प्रतिनिधि वा अधिकृत विक्रेता होइन। हामी स्वतन्त्र रूपमा डिजिटल सेवा तथा सदस्यता उपलब्ध गराउने सेवा प्रदायक हौं।
+                  </p>
+                  <p>
+                    सम्बन्धित ब्रान्ड तथा सेवाका नामहरू तिनका आधिकारिक कम्पनीहरूको ट्रेडमार्क हुन्। हाम्रो उद्देश्य ग्राहकहरूका लागि डिजिटल सेवाको पहुँच, सक्रियता र प्रयोगसम्बन्धी सहयोग सरल र सहज बनाउनु हो।
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Card 2: किन मूल्य कम छ? (Why are prices so low?) */}
+            <div className="rounded-2xl border border-amber-500/20 bg-secondary/30 backdrop-blur-sm overflow-hidden transition-all">
+              <button
+                type="button"
+                onClick={() => setIsPricingInfoExpanded(!isPricingInfoExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>किन मूल्य कम छ?</span>
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${isPricingInfoExpanded ? 'rotate-180' : ''}`} />
+              </button>
+              {isPricingInfoExpanded && (
+                <div className="px-4 pb-3.5 text-[11px] text-muted-foreground leading-relaxed border-t border-border/40 pt-2.5 animate-in fade-in duration-200 space-y-1.5">
+                  <p>
+                    हाम्रा केही डिजिटल उत्पादनहरू प्रचारात्मक अफर, विशेष छुट, क्षेत्रीय मूल्य निर्धारण तथा विभिन्न डिजिटल प्रमोशनमार्फत प्राप्त हुने भएकाले नियमित बजार मूल्यभन्दा कम मूल्यमा उपलब्ध हुन्छन्।
+                  </p>
+                  <p>
+                    त्यसैले प्रत्येक उत्पादनको अवधि, सुविधा, प्रयोगसम्बन्धी सीमा तथा नियमहरू फरक हुन सक्छन्। खरिद गर्नुअघि सम्बन्धित उत्पादनको विवरण ध्यानपूर्वक पढ्नुहोस्। (कम मूल्य हुनुको अर्थ सबै उत्पादनका सर्तहरू आधिकारिक वेबसाइटको नियमित योजनासँग पूर्ण समान हुन्छन् भन्ने होइन।)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 7. Clear Terms & Conditions Callout */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 max-w-2xl mx-auto flex items-start sm:items-center gap-3 text-left">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="text-xs">
+              <span className="font-bold text-amber-200 block sm:inline">
+                ⚠️ खरिद गर्नुअघि उत्पादनको विवरण, अवधि, सीमितता तथा नियम र सर्तहरू ध्यानपूर्वक पढ्नुहोस्।
+              </span>
+              <span className="text-[11px] text-amber-300/80 block mt-0.5">
+                सर्तहरू प्रत्येक उत्पादनअनुसार फरक हुन सक्छन्। खरिदपछि अनभिज्ञ रहनुभन्दा पहिले नै सबै विवरण बुझेर मात्र अर्डर गर्नुहोस्।
+              </span>
+            </div>
           </div>
 
           {/* Mobile search */}
-          <div className="flex md:hidden relative max-w-md mx-auto">
+          <div className="flex md:hidden relative max-w-md mx-auto mt-6">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search in NPR catalog..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-secondary/60 border border-red-500/30 rounded-full pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-red-500 transition-all font-medium"
+              className="w-full bg-secondary/60 border border-red-500/30 rounded-full pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-red-500 transition-all font-medium"
             />
           </div>
         </div>
       </section>
 
       {/* ─── Sticky Frozen Category & Status Bar ────────────────────────── */}
-      <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 py-3 shadow-md shadow-black/10">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="sticky top-[62px] z-30 w-full bg-background/95 backdrop-blur-md border-b border-red-500/20 shadow-md shadow-black/10">
+        {/* Row 1: Category pills */}
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pt-3 pb-2">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+            {/* Tab 1: Featured Picks (Default) */}
+            <button
+              onClick={() => setSelectedCategory('featured')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                selectedCategory === 'featured'
+                  ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)] font-extrabold'
+                  : 'bg-secondary/60 border-amber-500/30 text-amber-300 hover:text-white hover:bg-secondary'
+              }`}
+            >
+              {getCategoryIcon('featured', selectedCategory === 'featured')}
+              <span>Featured Picks ({featuredCount})</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                selectedCategory === 'featured' ? 'bg-black/20 text-black' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                HOT
+              </span>
+            </button>
+
+            {/* Tab 2: All Products */}
             <button
               onClick={() => setSelectedCategory('all')}
               className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 ${
@@ -607,13 +806,8 @@ export default function NepalStorePage() {
             })}
           </div>
         </div>
-      </div>
-
-      {/* ─── Main Catalog Content ───────────────────────────────────────── */}
-      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
-
-        {/* Filters row */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        {/* Row 2: Stock filter + view mode — also frozen */}
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-full text-xs font-bold">
             <button
               onClick={() => setStockFilter('all')}
@@ -632,7 +826,6 @@ export default function NepalStorePage() {
               <PackageX className="w-3 h-3" /> Out of Stock ({outOfStockCount})
             </button>
           </div>
-
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground font-medium">{filteredProducts.length} items available in NPR</span>
             <div className="flex items-center p-1 bg-secondary/60 border border-border/70 rounded-lg">
@@ -647,6 +840,11 @@ export default function NepalStorePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ─── Main Catalog Content ───────────────────────────────────────── */}
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
+
 
         {/* Product Grid */}
         {loading ? (
@@ -669,6 +867,7 @@ export default function NepalStorePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filteredProducts.map(product => {
               const productUpvotes = upvotes[product.id] || { count: 15, has_upvoted: false };
+              const { deliveryBadge, accBadge } = getProductBadges(product);
               return (
                 <div
                   key={product.id}
@@ -676,8 +875,8 @@ export default function NepalStorePage() {
                   onClick={() => handleOpenBuyModal(product)}
                 >
                   <div className="relative p-6 pb-4 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/20 to-amber-500/20 flex items-center justify-center text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                      {getProductEmoji(product.name)}
+                    <div className="w-16 h-16 rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-amber-500/10 to-transparent flex items-center justify-center mb-3 group-hover:scale-110 group-hover:border-red-500/40 transition-all duration-300 shadow-inner">
+                      <ProductIcon name={product.name} size="lg" />
                     </div>
 
                     <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -695,18 +894,25 @@ export default function NepalStorePage() {
                       </button>
                     </div>
 
-                    <div className="absolute top-3 left-3 flex items-center gap-1">
+                    <div className="absolute top-3 left-3 flex flex-col gap-1 items-start">
                       {product.is_featured && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          ⭐ Featured
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                          <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                          <span>Featured</span>
                         </span>
                       )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${product.is_instant ? 'bg-amber-500/15 text-amber-400 border border-amber-500/25' : 'bg-blue-500/15 text-blue-400 border border-blue-500/25'}`}>
-                        {product.is_instant ? '⚡ Instant' : '📋 Manual'}
-                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${deliveryBadge.cls}`}>
+                          {deliveryBadge.icon}
+                          <span>{deliveryBadge.label}</span>
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border ${accBadge.cls}`}>
+                          <span>{accBadge.label}</span>
+                        </span>
+                      </div>
                     </div>
 
-                    <h3 className="font-bold text-sm text-foreground mb-1 line-clamp-2 text-center group-hover:text-red-400 transition-colors leading-snug mt-3">
+                    <h3 className="font-bold text-sm text-foreground mb-1 line-clamp-2 text-center group-hover:text-red-400 transition-colors leading-snug mt-6">
                       {product.name}
                     </h3>
                     <p className="text-[11px] text-muted-foreground line-clamp-1 text-center mb-3">
@@ -736,12 +942,12 @@ export default function NepalStorePage() {
                     </div>
                     {product.stock === 0 ? (
                       <span className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30">
-                        Out of Stock
+                        Sold Out
                       </span>
                     ) : (
                       <button
-                        onClick={e => { e.stopPropagation(); handleOpenBuyModal(product); }}
-                        className="px-4 py-2 text-white text-xs font-extrabold rounded-xl bg-red-500 hover:bg-red-600 shadow-red-500/20 transition-all flex items-center gap-1 shadow-sm"
+                        onClick={() => handleOpenBuyModal(product)}
+                        className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-md shadow-red-500/20 flex items-center gap-1.5 transition-all group-hover:scale-105"
                       >
                         Buy Now
                         <ArrowRight className="w-3 h-3" />
@@ -754,34 +960,45 @@ export default function NepalStorePage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filteredProducts.map(product => (
-              <div
-                key={product.id}
-                className="glass-card rounded-xl px-4 py-3 flex items-center gap-4 hover:border-red-500/40 transition-all group cursor-pointer"
-                onClick={() => handleOpenBuyModal(product)}
-              >
-                <div className="w-10 h-10 rounded-xl border border-red-500/20 bg-gradient-to-br from-red-500/20 to-amber-500/20 flex items-center justify-center text-2xl flex-shrink-0">
-                  {getProductEmoji(product.name)}
-                </div>
-                <div className="flex-grow min-w-0">
-                  <div className="font-bold text-sm text-foreground group-hover:text-red-400 transition-colors truncate">{product.name}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">{product.description}</div>
-                </div>
-                <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${product.stock > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                  {product.stock > 0 ? 'In Stock' : 'Sold Out'}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-black text-red-400">
-                    {formatNpr(product.price)}
+            {filteredProducts.map(product => {
+              const { deliveryBadge, accBadge } = getProductBadges(product);
+              return (
+                <div
+                  key={product.id}
+                  className="glass-card rounded-xl px-4 py-3 flex items-center gap-4 hover:border-red-500/40 transition-all group cursor-pointer"
+                  onClick={() => handleOpenBuyModal(product)}
+                >
+                  <div className="w-10 h-10 rounded-xl border border-red-500/20 bg-gradient-to-br from-red-500/10 to-amber-500/10 flex items-center justify-center flex-shrink-0 shadow-inner">
+                    <ProductIcon name={product.name} size="sm" />
                   </div>
+                  <div className="flex-grow min-w-0">
+                    <div className="font-bold text-sm text-foreground group-hover:text-red-400 transition-colors truncate flex items-center gap-2">
+                      <span>{product.name}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${deliveryBadge.cls}`}>
+                        {deliveryBadge.label}
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${accBadge.cls}`}>
+                        {accBadge.label}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate">{product.description}</div>
+                  </div>
+                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${product.stock > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                    {product.stock > 0 ? 'In Stock' : 'Sold Out'}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-black text-red-400">
+                      {formatNpr(product.price)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleOpenBuyModal(product); }}
+                    disabled={product.stock === 0}
+                    className="flex-shrink-0 px-3 py-1.5 text-white text-xs font-bold rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >Buy</button>
                 </div>
-                <button
-                  onClick={e => { e.stopPropagation(); handleOpenBuyModal(product); }}
-                  disabled={product.stock === 0}
-                  className="flex-shrink-0 px-3 py-1.5 text-white text-xs font-bold rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                >Buy</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
@@ -814,12 +1031,13 @@ export default function NepalStorePage() {
 
             {/* Product header */}
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 rounded-2xl border border-red-500/30 bg-red-500/20 flex items-center justify-center text-3xl flex-shrink-0">
-                {getProductEmoji(activeModalProduct.name)}
+              <div className="w-14 h-14 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-center justify-center flex-shrink-0 shadow-inner">
+                <ProductIcon name={activeModalProduct.name} size="lg" />
               </div>
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-red-400 mb-1">
-                  🇳🇵 Nepal Order Checkout
+                <div className="text-[10px] font-bold uppercase tracking-wider text-red-400 mb-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Nepal Order Checkout</span>
                 </div>
                 <h2 className="text-base font-bold leading-snug">{activeModalProduct.name}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">{activeModalProduct.description}</p>
@@ -880,8 +1098,9 @@ export default function NepalStorePage() {
                   className="w-full bg-secondary/40 border border-border/70 rounded-xl pl-10 pr-3 py-2.5 text-xs font-semibold focus:outline-none focus:border-red-500 transition-all font-mono"
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                ✉️ Digital keys and account credentials will be automatically dispatched to this email.
+              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                <Mail className="w-3 h-3 text-red-400" />
+                <span>Digital keys and account credentials will be automatically dispatched to this email.</span>
               </p>
             </div>
 
@@ -891,12 +1110,18 @@ export default function NepalStorePage() {
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => { setPaymentMethod('nepal_qr'); fetchNepalQrDetails(); }}
                   className={`p-3 rounded-xl border text-left text-xs font-bold transition-all ${paymentMethod === 'nepal_qr' ? 'bg-red-500/20 border-red-500 text-red-300 shadow-sm' : 'bg-secondary/40 border-border/60 hover:bg-secondary text-muted-foreground'}`}>
-                  <span className="block font-black text-foreground">🇳🇵 eSewa / Fonepay</span>
+                  <span className="block font-black text-foreground flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5 text-red-400" />
+                    <span>eSewa / Fonepay</span>
+                  </span>
                   <span className="text-[10px] font-normal text-muted-foreground">Scan QR Code directly</span>
                 </button>
                 <button type="button" onClick={() => setPaymentMethod('balance')}
                   className={`p-3 rounded-xl border text-left text-xs font-bold transition-all ${paymentMethod === 'balance' ? 'bg-red-500/20 border-red-500 text-red-300 shadow-sm' : 'bg-secondary/40 border-border/60 hover:bg-secondary text-muted-foreground'}`}>
-                  <span className="block font-black text-foreground">💰 NPR Wallet</span>
+                  <span className="block font-black text-foreground flex items-center gap-1">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>NPR Wallet</span>
+                  </span>
                   <span className="text-[10px] font-normal text-muted-foreground">{user ? `Balance: ${formatNpr(user.balance)}` : 'Instant deduction'}</span>
                 </button>
               </div>
@@ -906,8 +1131,9 @@ export default function NepalStorePage() {
             {paymentMethod === 'nepal_qr' && (
               <div className="mb-4 p-4 rounded-2xl bg-secondary/40 border border-red-500/30 space-y-3">
                 <div className="text-center">
-                  <div className="text-[11px] font-extrabold uppercase text-red-400 mb-1.5 tracking-wider">
-                    {nepalQrData?.title || '🇳🇵 Direct eSewa / Khalti / Fonepay QR'}
+                  <div className="text-[11px] font-extrabold uppercase text-red-400 mb-1.5 tracking-wider flex items-center justify-center gap-1.5">
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>{nepalQrData?.title || 'Direct eSewa / Khalti / Fonepay QR'}</span>
                   </div>
                   {nepalQrData?.qr_url && (
                     <div className="my-2 p-2 bg-white rounded-2xl inline-block shadow-md">
@@ -1050,8 +1276,8 @@ export default function NepalStorePage() {
             ><X className="w-4 h-4" /></button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-2xl">
-                {getProductEmoji(reviewModalProduct.name)}
+              <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 shadow-inner">
+                <ProductIcon name={reviewModalProduct.name} size="md" />
               </div>
               <div>
                 <h3 className="font-extrabold text-base text-foreground leading-tight">{reviewModalProduct.name}</h3>
@@ -1098,9 +1324,14 @@ export default function NepalStorePage() {
               <button
                 type="submit"
                 disabled={isSubmittingReview || !newComment.trim()}
-                className="w-full py-2 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs rounded-xl shadow transition-all disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl font-bold text-xs bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shadow-md shadow-red-500/20"
               >
-                {isSubmittingReview ? "Publishing..." : "Submit Review ⭐"}
+                {isSubmittingReview ? "Publishing..." : (
+                  <>
+                    <span>Submit Verified Review</span>
+                    <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                  </>
+                )}
               </button>
             </form>
 
