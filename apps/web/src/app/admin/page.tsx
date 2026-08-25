@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -35,7 +35,37 @@ import {
   Sun,
   Moon,
   Bolt,
+  Plus,
+  Trash2,
+  Filter,
+  Flame,
+  Star,
+  Award,
+  Tag,
+  Sliders,
+  Percent,
+  Key,
+  Globe,
+  QrCode,
+  AlertTriangle,
+  Info,
+  CheckCheck,
+  X,
+  ChevronRight,
+  TrendingDown,
+  ArrowDownUp,
+  Wallet,
+  Upload,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  FileText,
+  Crown
 } from "lucide-react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types & Interfaces
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface AdminStats {
   total_users: number;
@@ -51,6 +81,39 @@ interface AdminStats {
   succeeded_payments_volume: number;
 }
 
+interface AdminProduct {
+  id: string; // "local_1" or "reseller_5"
+  raw_id: number;
+  name: string;
+  description?: string;
+  category_id: number;
+  category_name: string;
+  price: number;
+  price_npr?: number | null;
+  cost_price: number;
+  stock: number;
+  is_featured: boolean;
+  is_hot: boolean;
+  is_bestseller: boolean;
+  badge_text: string | null;
+  is_active: boolean;
+  auto_delivery?: boolean;
+  delivery_template?: string | null;
+  delivery_type?: string;
+  account_type?: string;
+  warranty: string | null;
+  note: string | null;
+  source_type: "local" | "reseller";
+  source_name: string | null;
+}
+
+interface AdminCategory {
+  id: number;
+  name: string;
+  is_active: boolean;
+  products_count: number;
+}
+
 interface AdminUser {
   telegram_id: number;
   email: string | null;
@@ -64,25 +127,47 @@ interface AdminUser {
   total_spent: number;
 }
 
-interface AdminProduct {
+interface UserPurchaseItem {
   id: number;
-  name: string;
-  category_id: number;
-  category_name: string;
+  unique_id: number;
+  item_name: string;
   price: number;
   cost_price: number;
-  stock: number;
-  is_featured: boolean;
-  warranty: string | null;
-  note: string | null;
+  profit: number;
+  bought_datetime: string;
+  value: string;
   source_type: string;
+  status: string;
 }
 
-interface AdminCategory {
+interface ResellerSourceBalance {
   id: number;
   name: string;
+  balance: number;
+  currency: string;
   is_active: boolean;
-  products_count: number;
+  last_synced: string | null;
+}
+
+interface ResellerTopUpLog {
+  id: number;
+  source_id: number;
+  source_name: string;
+  amount: number;
+  currency: string;
+  payment_method: string | null;
+  note: string | null;
+  tx_hash: string | null;
+  created_at: string;
+}
+
+interface ResellerBudget {
+  balances: ResellerSourceBalance[];
+  total_balance_usd: number;
+  total_spent_usd: number;
+  total_loaded_usd: number;
+  orders_count: number;
+  topups: ResellerTopUpLog[];
 }
 
 interface AdminOrder {
@@ -103,1156 +188,1718 @@ interface AdminPayment {
   provider: string;
   external_id: string;
   user_id: number | null;
+  user_email?: string | null;
   amount: number;
   currency: string;
   status: string;
   created_at: string;
 }
 
-interface AdminAuditLog {
+interface PendingNepalPayment {
   id: number;
-  timestamp: string;
-  level: string;
+  payment_id: number;
+  tx_id: string;
   user_id: number | null;
-  action: string;
-  resource_type: string | null;
-  resource_id: string | null;
-  details: string | null;
+  user_email: string | null;
+  amount_usd: number;
+  amount_npr: number;
+  note: string | null;
+  proof_image: string | null;
+  created_at: string;
+  status: string;
 }
 
-type TabType = "overview" | "users" | "products" | "promocodes" | "orders" | "payments" | "nepal_qr" | "audit";
+interface AdminPromo {
+  id: number;
+  code: string;
+  discount_type: string;
+  discount_value: number;
+  max_uses: number;
+  current_uses: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface StoreSettings {
+  geo_filtering_enabled: boolean;
+  npr_exchange_rate: number;
+  nepal_qr_url: string;
+  nepal_qr_title: string;
+  nepal_qr_account_name: string;
+  nepal_qr_account_id: string;
+  nepal_qr_instructions: string;
+  nepal_coming_soon: boolean;
+  nepal_coming_soon_text: string;
+  mantra_bar_text: string;
+  hero_title: string;
+  hero_subtitle: string;
+  announcement_banner_enabled: boolean;
+  announcement_banner_text: string;
+  announcement_banner_type: string;
+  global_auto_delivery_enabled?: boolean;
+  global_delivery_template?: string;
+}
+
+type TabType = "overview" | "products" | "categories" | "payments" | "orders" | "users" | "budget" | "promocodes" | "settings";
 
 export default function AdminPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // Nepal QR Config & Coming Soon Banner state
-  const [nepalQrUrl, setNepalQrUrl] = useState("");
-  const [nepalQrTitle, setNepalQrTitle] = useState("eSewa / Khalti / Fonepay Direct QR");
-  const [nepalQrAccountName, setNepalQrAccountName] = useState("Kali Store Nepal");
-  const [nepalQrAccountId, setNepalQrAccountId] = useState("9800000000");
-  const [nepalQrInstructions, setNepalQrInstructions] = useState("Scan QR code with eSewa/Khalti/Fonepay, transfer exact NPR amount, then submit your Tx Reference ID below.");
-  const [nepalComingSoon, setNepalComingSoon] = useState(true);
-  const [nepalComingSoonText, setNepalComingSoonText] = useState("🇳🇵 Nepal Store Direct Local Payment Gateway & Catalog Expansion is Coming Soon! Stay tuned as we roll out instant eSewa & Khalti automated API verification.");
-  const [isSavingNepalQr, setIsSavingNepalQr] = useState(false);
-  const [nepalQrSaveSuccess, setNepalQrSaveSuccess] = useState(false);
+  // Core data states
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [pendingNepal, setPendingNepal] = useState<PendingNepalPayment[]>([]);
+  const [promocodes, setPromocodes] = useState<AdminPromo[]>([]);
+  const [settings, setSettings] = useState<StoreSettings>({
+    geo_filtering_enabled: true,
+    npr_exchange_rate: 135.0,
+    nepal_qr_url: "",
+    nepal_qr_title: "eSewa / Khalti / Fonepay Direct QR",
+    nepal_qr_account_name: "Kali Store Nepal",
+    nepal_qr_account_id: "9800000000",
+    nepal_qr_instructions: "",
+    nepal_coming_soon: false,
+    nepal_coming_soon_text: "",
+    mantra_bar_text: "॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥",
+    hero_title: "KALI DIGITAL STORE",
+    hero_subtitle: "Genuine ChatGPT Plus, Claude, Gemini, Canva Pro, JetBrains, VPNs, and Dev API tokens with instant cryptographic delivery and eternal warranty.",
+    announcement_banner_enabled: false,
+    announcement_banner_text: "",
+    announcement_banner_type: "info",
+    global_auto_delivery_enabled: true,
+    global_delivery_template: "Hello {customer_email},\n\nThank you for your order! Here are your digital credentials:\n\n{credentials}\n\nProduct: {product_name} (x{quantity})\nWarranty: {warranty}\nSupport Contact: {support_contact}",
+  });
 
-  // Product Creation & Keys Modal State
+  // User Sorting & Purchases state
+  const [userSortField, setUserSortField] = useState<"balance" | "purchases_count" | "total_spent" | "registration_date" | "telegram_id">("registration_date");
+  const [userSortOrder, setUserSortOrder] = useState<"asc" | "desc">("desc");
+  const [isUserPurchasesOpen, setIsUserPurchasesOpen] = useState(false);
+  const [userPurchasesUser, setUserPurchasesUser] = useState<AdminUser | null>(null);
+  const [userPurchasesList, setUserPurchasesList] = useState<UserPurchaseItem[]>([]);
+  const [loadingUserPurchases, setLoadingUserPurchases] = useState(false);
+
+  // Reseller Budget & API Wallets state
+  const [resellerBudget, setResellerBudget] = useState<ResellerBudget | null>(null);
+  const [budgetPeriod, setBudgetPeriod] = useState<"all" | "day" | "week" | "month" | "custom">("all");
+  const [budgetStartDate, setBudgetStartDate] = useState("");
+  const [budgetEndDate, setBudgetEndDate] = useState("");
+  const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const [topUpSourceId, setTopUpSourceId] = useState<number>(0);
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [topUpMethod, setTopUpMethod] = useState("USDT TRC20");
+  const [topUpNote, setTopUpNote] = useState("");
+  const [topUpTxHash, setTopUpTxHash] = useState("");
+
+  // QR Upload & Banner Preview state
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
+  const [isBannerPreviewOpen, setIsBannerPreviewOpen] = useState(false);
+
+  // Product Filters
+  const [prodSearch, setProdSearch] = useState("");
+  const [prodCatFilter, setProdCatFilter] = useState<string>("all");
+  const [prodStatusFilter, setProdStatusFilter] = useState<"all" | "active" | "disabled">("all");
+  const [prodStockFilter, setProdStockFilter] = useState<"all" | "instock" | "lowstock" | "outofstock">("all");
+  const [prodBadgeFilter, setProdBadgeFilter] = useState<"all" | "featured" | "hot" | "bestseller">("all");
+  const [prodSourceFilter, setProdSourceFilter] = useState<"all" | "local" | "reseller">("all");
+
+  // Modals state
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [isEditProductOpen, setIsEditProductOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
+  const [isBulkPriceOpen, setIsBulkPriceOpen] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [stockProduct, setStockProduct] = useState<AdminProduct | null>(null);
+  const [stockItems, setStockItems] = useState<{ id: number; value: string; is_infinity: boolean }[]>([]);
+  const [newStockKeys, setNewStockKeys] = useState("");
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null);
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [balanceUser, setBalanceUser] = useState<AdminUser | null>(null);
+  const [balanceAmount, setBalanceAmount] = useState("");
+  const [balanceReason, setBalanceReason] = useState("Admin balance adjustment");
+  const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [selectedProofImg, setSelectedProofImg] = useState<string | null>(null);
+  const [isOrderCredentialsOpen, setIsOrderCredentialsOpen] = useState(false);
+  const [selectedOrderCredentials, setSelectedOrderCredentials] = useState<string | null>(null);
+
+  // Form states for Add Product
   const [newProdName, setNewProdName] = useState("");
   const [newProdCatId, setNewProdCatId] = useState<number>(0);
   const [newProdPrice, setNewProdPrice] = useState("");
+  const [newProdPriceNpr, setNewProdPriceNpr] = useState("");
   const [newProdCostPrice, setNewProdCostPrice] = useState("");
   const [newProdWarranty, setNewProdWarranty] = useState("24 Hours");
   const [newProdNote, setNewProdNote] = useState("");
-  const [newProdKeys, setNewProdKeys] = useState("");
+  const [newProdDesc, setNewProdDesc] = useState("");
+  const [newProdFeatured, setNewProdFeatured] = useState(false);
+  const [newProdHot, setNewProdHot] = useState(false);
+  const [newProdBestseller, setNewProdBestseller] = useState(false);
+  const [newProdBadgeText, setNewProdBadgeText] = useState("");
+  const [newProdAutoDelivery, setNewProdAutoDelivery] = useState(true);
+  const [newProdDeliveryType, setNewProdDeliveryType] = useState<string>("instant");
+  const [newProdAccountType, setNewProdAccountType] = useState<string>("preactivated");
+  const [newProdDeliveryTemplate, setNewProdDeliveryTemplate] = useState("");
+  const [newProdInitialKeys, setNewProdInitialKeys] = useState("");
 
-  const [addKeysProduct, setAddKeysProduct] = useState<AdminProduct | null>(null);
-  const [stockKeysInput, setStockKeysInput] = useState("");
+  // Bulk Price Form State
+  const [bulkCatId, setBulkCatId] = useState<string>("all");
+  const [bulkChangeType, setBulkChangeType] = useState<"percentage" | "fixed_amount">("percentage");
+  const [bulkChangeValue, setBulkChangeValue] = useState("");
+  const [bulkRounding, setBulkRounding] = useState<number>(0.25);
 
-  // Category Modal State
-  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
+  // Category Form State
+  const [newCatName, setNewCatName] = useState("");
 
-  // Promocode State
-  const [promocodes, setPromocodes] = useState<any[]>([]);
+  // Promocode Form State
   const [isAddPromoOpen, setIsAddPromoOpen] = useState(false);
   const [newPromoCode, setNewPromoCode] = useState("");
   const [newPromoType, setNewPromoType] = useState("percent");
-  const [newPromoValue, setNewPromoValue] = useState("");
-  const [newPromoMaxUses, setNewPromoMaxUses] = useState("100");
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [newPromoVal, setNewPromoVal] = useState("");
+  const [newPromoMaxUses, setNewPromoMaxUses] = useState("0");
 
-  const fetchNepalQrSettings = async () => {
-    try {
-      const res = await api.get('/admin/nepal-qr');
-      if (res.data) {
-        setNepalQrUrl(res.data.qr_url || "");
-        setNepalQrTitle(res.data.title || "eSewa / Khalti / Fonepay Direct QR");
-        setNepalQrAccountName(res.data.account_name || "Kali Store Nepal");
-        setNepalQrAccountId(res.data.account_id || "9800000000");
-        setNepalQrInstructions(res.data.instructions || "");
-        setNepalComingSoon(res.data.coming_soon ?? true);
-        if (res.data.coming_soon_text) setNepalComingSoonText(res.data.coming_soon_text);
-      }
-    } catch (e) {
-      console.error("Failed to load Nepal QR settings", e);
-    }
+  // Inline price edit helper
+  const [inlinePriceId, setInlinePriceId] = useState<string | null>(null);
+  const [inlinePriceVal, setInlinePriceVal] = useState<string>("");
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleSaveNepalQr = async (e: React.FormEvent) => {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Data Loaders
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Auth Gate State
+  const [needsAuth, setNeedsAuth] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("prabin");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSavingNepalQr(true);
+    setAuthLoading(true);
+    setAuthError("");
     try {
-      await api.post('/admin/nepal-qr', {
-        qr_url: nepalQrUrl,
-        title: nepalQrTitle,
-        account_name: nepalQrAccountName,
-        account_id: nepalQrAccountId,
-        instructions: nepalQrInstructions,
-        coming_soon: nepalComingSoon,
-        coming_soon_text: nepalComingSoonText,
+      const res = await api.post("/auth/admin_login", {
+        username: adminUsername,
+        password: adminPassword,
       });
-      setNepalQrSaveSuccess(true);
-      setTimeout(() => setNepalQrSaveSuccess(false), 3000);
+      localStorage.setItem("token", res.data.access_token);
+      setNeedsAuth(false);
+      setAuthError("");
+      loadAllData();
+      showToast("⚡ Welcome back, Master Admin! Control Hub unlocked.");
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to save Nepal QR settings.");
+      setAuthError(err?.response?.data?.detail || "Invalid Admin username or password.");
     } finally {
-      setIsSavingNepalQr(false);
+      setAuthLoading(false);
     }
   };
 
-  const fetchPromocodes = async () => {
+  const loadAllData = useCallback(async () => {
     try {
-      const res = await api.get('/admin/promocodes');
-      setPromocodes(res.data || []);
-    } catch (e) {
-      console.error("Failed to load promocodes", e);
-    }
-  };
-
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProdName.trim() || !newProdPrice || !newProdCatId) {
-      alert("Please fill in Product Name, Price, and Category.");
-      return;
-    }
-    try {
-      await api.post('/admin/products', {
-        name: newProdName,
-        category_id: newProdCatId,
-        price: parseFloat(newProdPrice),
-        cost_price: parseFloat(newProdCostPrice || "0"),
-        warranty: newProdWarranty,
-        note: newProdNote,
-        initial_keys: newProdKeys,
-      });
-      alert("Product created successfully!");
-      setIsAddProductOpen(false);
-      setNewProdName("");
-      setNewProdPrice("");
-      setNewProdCostPrice("");
-      setNewProdKeys("");
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to create product.");
-    }
-  };
-
-  const handleDeleteProduct = async (prodId: number) => {
-    if (!confirm("Are you sure you want to delete this product and its unsold keys?")) return;
-    try {
-      await api.delete(`/admin/products/${prodId}`);
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to delete product.");
-    }
-  };
-
-  const handleAddStockKeys = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addKeysProduct || !stockKeysInput.trim()) return;
-    try {
-      const res = await api.post(`/admin/products/${addKeysProduct.id}/keys`, {
-        keys: stockKeysInput,
-      });
-      alert(`Added ${res.data.added_count} new keys to stock!`);
-      setAddKeysProduct(null);
-      setStockKeysInput("");
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to add keys.");
-    }
-  };
-
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCategoryName.trim()) return;
-    try {
-      await api.post('/admin/categories', { name: newCategoryName });
-      setIsAddCategoryOpen(false);
-      setNewCategoryName("");
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to create category.");
-    }
-  };
-
-  const handleDeleteCategory = async (catId: number) => {
-    if (!confirm("Are you sure you want to delete this category?")) return;
-    try {
-      await api.delete(`/admin/categories/${catId}`);
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to delete category.");
-    }
-  };
-
-  const handleCreatePromo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPromoCode.trim() || !newPromoValue) return;
-    try {
-      await api.post('/admin/promocodes', {
-        code: newPromoCode,
-        discount_type: newPromoType,
-        discount_value: parseFloat(newPromoValue),
-        max_uses: parseInt(newPromoMaxUses || "0"),
-      });
-      setIsAddPromoOpen(false);
-      setNewPromoCode("");
-      setNewPromoValue("");
-      fetchPromocodes();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to create promocode.");
-    }
-  };
-
-  const handleDeletePromo = async (promoId: number) => {
-    if (!confirm("Delete this promocode?")) return;
-    try {
-      await api.delete(`/admin/promocodes/${promoId}`);
-      fetchPromocodes();
-    } catch (err: any) {
-      alert("Failed to delete promocode.");
-    }
-  };
-
-  const handleApprovePayment = async (paymentId: number) => {
-    if (!confirm(`Approve payment #${paymentId} and credit user balance?`)) return;
-    try {
-      const res = await api.post(`/admin/payments/${paymentId}/approve`);
-      alert(res.data.message || "Payment approved!");
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to approve payment.");
-    }
-  };
-
-  const handleRejectPayment = async (paymentId: number) => {
-    if (!confirm(`Reject payment #${paymentId}?`)) return;
-    try {
-      await api.post(`/admin/payments/${paymentId}/reject`);
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to reject payment.");
-    }
-  };
-
-  // Data states
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [products, setProducts] = useState<AdminProduct[]>([]);
-  const [categories, setCategories] = useState<AdminCategory[]>([]);
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [payments, setPayments] = useState<AdminPayment[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
-
-  // Search & Filter states
-  const [userSearch, setUserSearch] = useState("");
-  const [productSearch, setProductSearch] = useState("");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [paymentSearch, setPaymentSearch] = useState("");
-  const [paymentProviderFilter, setPaymentProviderFilter] = useState("all");
-  const [auditSearch, setAuditSearch] = useState("");
-
-  // Modal / Interaction states
-  const [selectedSecret, setSelectedSecret] = useState<{ title: string; content: string } | null>(null);
-  const [balanceModalUser, setBalanceModalUser] = useState<AdminUser | null>(null);
-  const [balanceAdjustAmount, setBalanceAdjustAmount] = useState("");
-  const [balanceAdjustReason, setBalanceAdjustReason] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const loadAdminData = async () => {
-    setRefreshing(true);
-    try {
-      // 1. Verify current user profile & admin status
-      const meRes = await api.get("/user/me");
-      if (!meRes.data?.is_admin) {
-        alert("Access denied: Admin privileges required.");
-        router.push("/dashboard");
+      setRefreshing(true);
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        setNeedsAuth(true);
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
-      setIsAdmin(true);
 
-      // 2. Fetch all admin datasets concurrently
       const [
         statsRes,
-        usersRes,
-        productsRes,
-        categoriesRes,
-        ordersRes,
-        paymentsRes,
-        auditRes,
-      ] = await Promise.all([
+        prodRes,
+        catRes,
+        userRes,
+        orderRes,
+        pmtRes,
+        nepalRes,
+        promoRes,
+        settingsRes,
+        delivTplRes,
+      ] = await Promise.allSettled([
         api.get("/admin/stats"),
-        api.get("/admin/users?limit=100"),
-        api.get("/admin/products?limit=200"),
+        api.get("/admin/products?limit=500"),
         api.get("/admin/categories"),
+        api.get("/admin/users?limit=100"),
         api.get("/admin/orders?limit=100"),
         api.get("/admin/payments?limit=100"),
-        api.get("/admin/audit-logs?limit=100"),
+        api.get("/admin/payments/pending-nepal"),
+        api.get("/admin/promocodes"),
+        api.get("/admin/settings"),
+        api.get("/admin/settings/delivery-templates"),
       ]);
 
-      setStats(statsRes.data);
-      setUsers(usersRes.data);
-      setProducts(productsRes.data);
-      setCategories(categoriesRes.data);
-      setOrders(ordersRes.data);
-      setPayments(paymentsRes.data);
-      setAuditLogs(auditRes.data);
-    } catch (err: any) {
-      console.error("Failed to load admin data:", err);
-      if (err.response?.status === 403 || err.response?.status === 401) {
-        alert("Admin authorization failed. Please log in with an admin account.");
-        router.push("/login");
+      let isUnauthorized = false;
+      [statsRes, prodRes, catRes, userRes, orderRes, pmtRes, nepalRes, promoRes, settingsRes, delivTplRes].forEach(res => {
+        if (res.status === "rejected" && (res.reason?.response?.status === 401 || res.reason?.response?.status === 403)) {
+          isUnauthorized = true;
+        }
+      });
+
+      if (isUnauthorized) {
+        setNeedsAuth(true);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      setNeedsAuth(false);
+      if (statsRes.status === "fulfilled") setStats(statsRes.value.data);
+      if (prodRes.status === "fulfilled") setProducts(prodRes.value.data);
+      if (catRes.status === "fulfilled") {
+        setCategories(catRes.value.data);
+        if (catRes.value.data.length > 0) {
+          setNewProdCatId(prev => (prev === 0 ? catRes.value.data[0].id : prev));
+        }
+      }
+      if (userRes.status === "fulfilled") setUsers(userRes.value.data);
+      if (orderRes.status === "fulfilled") setOrders(orderRes.value.data);
+      if (pmtRes.status === "fulfilled") setPayments(pmtRes.value.data);
+      if (nepalRes.status === "fulfilled") setPendingNepal(nepalRes.value.data);
+      if (promoRes.status === "fulfilled") setPromocodes(promoRes.value.data);
+      if (settingsRes.status === "fulfilled") {
+        setSettings(prev => ({ ...prev, ...settingsRes.value.data }));
+      }
+      if (delivTplRes.status === "fulfilled") {
+        setSettings(prev => ({
+          ...prev,
+          global_auto_delivery_enabled: delivTplRes.value.data.global_auto_delivery_enabled,
+          global_delivery_template: delivTplRes.value.data.global_delivery_template,
+        }));
+      }
+    } catch (e: any) {
+      if (e.response?.status === 401 || e.response?.status === 403) {
+        setNeedsAuth(true);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  // Initial mount trigger with safety timeout
+  useEffect(() => {
+    loadAllData();
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+    return () => clearTimeout(safetyTimer);
+  }, [loadAllData]);
+
+  const loadBudgetLedger = useCallback(async () => {
+    try {
+      let url = `/admin/resellers/budget?period=${budgetPeriod}`;
+      if (budgetPeriod === "custom" && budgetStartDate && budgetEndDate) {
+        url += `&start_date=${budgetStartDate}&end_date=${budgetEndDate}`;
+      }
+      const res = await api.get(url);
+      setResellerBudget(res.data);
+      if (res.data.balances?.length > 0 && topUpSourceId === 0) {
+        setTopUpSourceId(res.data.balances[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to load budget ledger", e);
+    }
+  }, [budgetPeriod, budgetStartDate, budgetEndDate, topUpSourceId]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
+    if (activeTab === "budget") {
+      loadBudgetLedger();
     }
+  }, [activeTab, loadBudgetLedger]);
 
-    // Theme init
-    const savedTheme = (localStorage.getItem("theme") as "dark" | "light") || "dark";
-    setTheme(savedTheme);
-    if (savedTheme === "light") document.documentElement.classList.add("light-theme");
-    else document.documentElement.classList.remove("light-theme");
-
-    loadAdminData();
-  }, [router]);
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("theme", next);
-    if (next === "light") document.documentElement.classList.add("light-theme");
-    else document.documentElement.classList.remove("light-theme");
+  const handleOpenUserPurchases = async (u: AdminUser) => {
+    setUserPurchasesUser(u);
+    setIsUserPurchasesOpen(true);
+    setLoadingUserPurchases(true);
+    try {
+      const res = await api.get(`/admin/users/${u.telegram_id}/purchases`);
+      setUserPurchasesList(res.data || []);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to load user purchases", "error");
+      setUserPurchasesList([]);
+    } finally {
+      setLoadingUserPurchases(false);
+    }
   };
 
-  // Actions
-  const handleBalanceSubmit = async (e: React.FormEvent) => {
+  const handleRecordTopUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!balanceModalUser) return;
-    const amt = parseFloat(balanceAdjustAmount);
-    if (isNaN(amt) || amt === 0) {
-      alert("Please enter a valid non-zero amount.");
+    const amt = parseFloat(topUpAmount);
+    if (isNaN(amt) || amt <= 0 || !topUpSourceId) {
+      showToast("Please enter a valid deposit amount and select provider", "error");
       return;
     }
-
     try {
-      const res = await api.post(`/admin/users/${balanceModalUser.telegram_id}/balance`, {
+      await api.post(`/admin/resellers/${topUpSourceId}/topup`, {
         amount: amt,
-        reason: balanceAdjustReason || "Manual adjustment via Admin Panel",
+        currency: "USD",
+        payment_method: topUpMethod,
+        note: topUpNote,
+        tx_hash: topUpTxHash,
+        update_balance: true
       });
-      alert(`Success! New balance: $${res.data.new_balance.toFixed(2)}`);
-      setBalanceModalUser(null);
-      setBalanceAdjustAmount("");
-      setBalanceAdjustReason("");
-      loadAdminData();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to adjust balance.");
+      showToast(`Recorded $${amt.toFixed(2)} deposit into reseller wallet!`);
+      setIsTopUpModalOpen(false);
+      setTopUpAmount("");
+      setTopUpNote("");
+      setTopUpTxHash("");
+      loadBudgetLedger();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to record topup", "error");
     }
   };
 
-  const handleToggleBlock = async (user: AdminUser) => {
-    const action = user.is_blocked ? "unblock" : "block";
-    if (!confirm(`Are you sure you want to ${action} user ${user.email || user.telegram_id}?`)) return;
-
-    try {
-      await api.post(`/admin/users/${user.telegram_id}/toggle-block`);
-      loadAdminData();
-    } catch (err) {
-      alert("Failed to update user block status.");
-    }
+  const handleQrFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingQr(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      try {
+        await api.post("/admin/settings/upload-qr", { image_data: base64Data });
+        setSettings(prev => ({ ...prev, nepal_qr_url: base64Data }));
+        showToast("Nepal QR Code photo uploaded successfully!");
+      } catch (err: any) {
+        showToast(err.response?.data?.detail || "Failed to upload QR image", "error");
+      } finally {
+        setIsUploadingQr(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleToggleFeatured = async (product: AdminProduct) => {
-    try {
-      await api.post(`/admin/products/${product.id}/toggle-featured`);
-      loadAdminData();
-    } catch (err) {
-      alert("Failed to toggle featured status.");
-    }
-  };
-
-  const handleToggleCategory = async (cat: AdminCategory) => {
-    try {
-      await api.post(`/admin/categories/${cat.id}/toggle-active`);
-      loadAdminData();
-    } catch (err) {
-      alert("Failed to toggle category active status.");
-    }
-  };
-
-  // Filtered lists
-  const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
-      const q = userSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        u.telegram_id.toString().includes(q) ||
-        (u.email && u.email.toLowerCase().includes(q)) ||
-        u.role_name.toLowerCase().includes(q)
-      );
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      let valA: any = a[userSortField];
+      let valB: any = b[userSortField];
+      if (userSortField === "registration_date") {
+        valA = new Date(a.registration_date || 0).getTime();
+        valB = new Date(b.registration_date || 0).getTime();
+      }
+      if (valA < valB) return userSortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return userSortOrder === "asc" ? 1 : -1;
+      return 0;
     });
-  }, [users, userSearch]);
+  }, [users, userSortField, userSortOrder]);
+
+  const toggleUserSort = (field: "balance" | "purchases_count" | "total_spent" | "registration_date" | "telegram_id") => {
+    if (userSortField === field) {
+      setUserSortOrder(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setUserSortField(field);
+      setUserSortOrder("desc");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Product Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleToggleProductActive = async (prod: AdminProduct) => {
+    try {
+      const res = await api.post(`/admin/products/${prod.id}/toggle-active`);
+      setProducts(prev => prev.map(p => p.id === prod.id ? { ...p, is_active: res.data.is_active } : p));
+      showToast(`${prod.name} is now ${res.data.is_active ? "ENABLED" : "DISABLED"}`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to toggle product status", "error");
+    }
+  };
+
+  const handleToggleProductBadge = async (prod: AdminProduct, badgeType: "featured" | "hot" | "bestseller") => {
+    try {
+      const res = await api.post(`/admin/products/${prod.id}/toggle-badge?badge_type=${badgeType}`);
+      setProducts(prev => prev.map(p => {
+        if (p.id === prod.id) {
+          return {
+            ...p,
+            is_featured: badgeType === "featured" ? res.data.value : p.is_featured,
+            is_hot: badgeType === "hot" ? res.data.value : p.is_hot,
+            is_bestseller: badgeType === "bestseller" ? res.data.value : p.is_bestseller,
+          };
+        }
+        return p;
+      }));
+      showToast(`Updated ${badgeType} badge for ${prod.name}`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to update badge", "error");
+    }
+  };
+
+  const handleSaveInlinePrice = async (prod: AdminProduct) => {
+    const val = parseFloat(inlinePriceVal);
+    if (isNaN(val) || val <= 0) {
+      showToast("Invalid price amount", "error");
+      return;
+    }
+    try {
+      await api.patch(`/admin/products/${prod.id}`, { price: val });
+      setProducts(prev => prev.map(p => p.id === prod.id ? { ...p, price: val } : p));
+      setInlinePriceId(null);
+      showToast(`Price for ${prod.name} updated to $${val.toFixed(2)}`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to update price", "error");
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName.trim() || !newProdPrice) {
+      showToast("Please enter product name and price", "error");
+      return;
+    }
+    try {
+      await api.post("/admin/products", {
+        name: newProdName.trim(),
+        category_id: newProdCatId,
+        price: parseFloat(newProdPrice),
+        price_npr: newProdPriceNpr ? parseFloat(newProdPriceNpr) : null,
+        cost_price: parseFloat(newProdCostPrice) || 0,
+        warranty: newProdWarranty,
+        note: newProdNote,
+        description: newProdDesc,
+        is_featured: newProdFeatured,
+        is_hot: newProdHot,
+        is_bestseller: newProdBestseller,
+        badge_text: newProdBadgeText.trim() || null,
+        auto_delivery: newProdAutoDelivery,
+        delivery_template: newProdDeliveryTemplate.trim() || null,
+        delivery_type: newProdDeliveryType || "instant",
+        account_type: newProdAccountType || "preactivated",
+        initial_keys: newProdInitialKeys.trim() || null,
+      });
+      showToast("Product created successfully!");
+      setIsAddProductOpen(false);
+      // Reset form
+      setNewProdName("");
+      setNewProdPrice("");
+      setNewProdPriceNpr("");
+      setNewProdCostPrice("");
+      setNewProdDesc("");
+      setNewProdAutoDelivery(true);
+      setNewProdDeliveryType("instant");
+      setNewProdAccountType("preactivated");
+      setNewProdDeliveryTemplate("");
+      setNewProdInitialKeys("");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to create product", "error");
+    }
+  };
+
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    try {
+      await api.patch(`/admin/products/${editingProduct.id}`, {
+        name: editingProduct.name,
+        price: editingProduct.price,
+        price_npr: editingProduct.price_npr,
+        description: editingProduct.description,
+        cost_price: editingProduct.cost_price,
+        category_id: editingProduct.category_id,
+        warranty: editingProduct.warranty,
+        note: editingProduct.note,
+        is_featured: editingProduct.is_featured,
+        is_hot: editingProduct.is_hot,
+        is_bestseller: editingProduct.is_bestseller,
+        badge_text: editingProduct.badge_text,
+        is_active: editingProduct.is_active,
+        auto_delivery: editingProduct.auto_delivery !== false,
+        delivery_template: editingProduct.delivery_template || null,
+        delivery_type: editingProduct.delivery_type || "instant",
+        account_type: editingProduct.account_type || "preactivated",
+      });
+      showToast(`Product ${editingProduct.name} updated!`);
+      setIsEditProductOpen(false);
+      setEditingProduct(null);
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to update product", "error");
+    }
+  };
+
+  const handleAutoFulfillOrder = async (
+    productId: string,
+    productName: string,
+    quantity: number,
+    amountStr: string,
+    customerEmail: string,
+    orderId?: string
+  ) => {
+    try {
+      showToast("⚡ Initiating multi-stage automated fulfillment pipeline...");
+      const res = await api.post("/admin/orders/auto-fulfill", {
+        product_id: productId,
+        product_name: productName,
+        quantity: quantity || 1,
+        amount_str: amountStr,
+        customer_email: customerEmail,
+        order_id: orderId || "",
+      });
+      showToast(res.data.message || `Delivered to ${customerEmail}!`);
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Auto-fulfillment failed. Please check provider balance.", "error");
+    }
+  };
+
+  const handleDeleteProduct = async (prod: AdminProduct) => {
+    if (!confirm(`Are you sure you want to delete "${prod.name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/admin/products/${prod.id}`);
+      setProducts(prev => prev.filter(p => p.id !== prod.id));
+      showToast(`Product ${prod.name} deleted.`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to delete product", "error");
+    }
+  };
+
+  const handleApplyBulkPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(bulkChangeValue);
+    if (isNaN(val)) {
+      showToast("Please enter a valid change amount", "error");
+      return;
+    }
+    try {
+      const res = await api.post("/admin/products/bulk-price", {
+        category_id: bulkCatId === "all" ? null : parseInt(bulkCatId),
+        change_type: bulkChangeType,
+        change_value: val,
+        round_to_nearest: bulkRounding,
+      });
+      showToast(`Updated pricing on ${res.data.updated_products_count} products!`);
+      setIsBulkPriceOpen(false);
+      setBulkChangeValue("");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to apply bulk pricing", "error");
+    }
+  };
+
+  const handleOpenStockModal = async (prod: AdminProduct) => {
+    setStockProduct(prod);
+    setIsStockModalOpen(true);
+    try {
+      const res = await api.get(`/admin/products/${prod.id}/stock`);
+      setStockItems(res.data.items || []);
+    } catch (e) {
+      setStockItems([]);
+    }
+  };
+
+  const handleAddStockKeys = async () => {
+    if (!stockProduct || !newStockKeys.trim()) return;
+    try {
+      const res = await api.post(`/admin/products/${stockProduct.id}/stock`, { keys: newStockKeys.trim() });
+      showToast(`Added ${res.data.added_count} stock keys!`);
+      setNewStockKeys("");
+      const refreshed = await api.get(`/admin/products/${stockProduct.id}/stock`);
+      setStockItems(refreshed.data.items || []);
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to add keys", "error");
+    }
+  };
+
+  const handleDeleteStockItem = async (valId: number) => {
+    if (!stockProduct) return;
+    try {
+      await api.delete(`/admin/products/${stockProduct.id}/stock/${valId}`);
+      setStockItems(prev => prev.filter(i => i.id !== valId));
+      showToast("Stock key deleted");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to delete key", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Category Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleToggleCategoryActive = async (cat: AdminCategory) => {
+    try {
+      const res = await api.patch(`/admin/categories/${cat.id}`, { is_active: !cat.is_active });
+      setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: !c.is_active } : c));
+      showToast(`Category ${cat.name} is now ${!cat.is_active ? "ACTIVE" : "DISABLED"}`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to toggle category", "error");
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    try {
+      await api.post("/admin/categories", { name: newCatName.trim(), is_active: true });
+      showToast("Category created!");
+      setNewCatName("");
+      setIsAddCategoryOpen(false);
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to create category", "error");
+    }
+  };
+
+  const handleSaveEditCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    try {
+      await api.patch(`/admin/categories/${editingCategory.id}`, {
+        name: editingCategory.name,
+        is_active: editingCategory.is_active,
+      });
+      showToast("Category updated!");
+      setIsEditCategoryOpen(false);
+      setEditingCategory(null);
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to update category", "error");
+    }
+  };
+
+  const handleDeleteCategory = async (cat: AdminCategory) => {
+    if (!confirm(`Delete category "${cat.name}"? Products inside may become uncategorized.`)) return;
+    try {
+      await api.delete(`/admin/categories/${cat.id}`);
+      setCategories(prev => prev.filter(c => c.id !== cat.id));
+      showToast("Category deleted.");
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to delete category", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Payments & Nepal QR Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleApprovePayment = async (paymentId: number) => {
+    try {
+      const res = await api.post(`/admin/payments/${paymentId}/approve`);
+      showToast(res.data.message || "Payment approved!");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to approve payment", "error");
+    }
+  };
+
+  const handleRejectPayment = async (paymentId: number) => {
+    const reason = prompt("Enter rejection reason (optional):", "Invalid reference or payment not received");
+    if (reason === null) return;
+    try {
+      const res = await api.post(`/admin/payments/${paymentId}/reject?reason=${encodeURIComponent(reason)}`);
+      showToast(res.data.message || "Payment rejected.");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to reject payment", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // User Management Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleAdjustBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!balanceUser) return;
+    const amount = parseFloat(balanceAmount);
+    if (isNaN(amount) || amount === 0) {
+      showToast("Please enter a valid adjustment amount", "error");
+      return;
+    }
+    try {
+      const res = await api.post(`/admin/users/${balanceUser.telegram_id}/balance`, {
+        amount,
+        reason: balanceReason.trim()
+      });
+      showToast(`User balance adjusted! New balance: $${res.data.new_balance.toFixed(2)}`);
+      setIsBalanceModalOpen(false);
+      setBalanceAmount("");
+      loadAllData();
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to adjust balance", "error");
+    }
+  };
+
+  const handleToggleUserBlock = async (user: AdminUser) => {
+    try {
+      const res = await api.post(`/admin/users/${user.telegram_id}/toggle-block`);
+      setUsers(prev => prev.map(u => u.telegram_id === user.telegram_id ? { ...u, is_blocked: res.data.is_blocked } : u));
+      showToast(`User is now ${res.data.is_blocked ? "BLOCKED" : "UNBLOCKED"}`);
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to toggle block", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Settings Handlers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await Promise.all([
+        api.post("/admin/settings", settings),
+        api.post("/admin/settings/delivery-templates", {
+          template: settings.global_delivery_template || "",
+          global_auto_delivery_enabled: settings.global_auto_delivery_enabled !== false,
+        }),
+      ]);
+      showToast("Store rules and delivery templates saved successfully!");
+    } catch (e: any) {
+      showToast(e.response?.data?.detail || "Failed to save settings", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Filtered Products Memo
+  // ─────────────────────────────────────────────────────────────────────────
 
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      const q = productSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        p.name.toLowerCase().includes(q) ||
-        p.category_name.toLowerCase().includes(q)
-      );
-    });
-  }, [products, productSearch]);
+    return products.filter(p => {
+      // Search
+      if (prodSearch.trim()) {
+        const s = prodSearch.toLowerCase().trim();
+        const match = p.name.toLowerCase().includes(s) || 
+                      p.id.toLowerCase().includes(s) || 
+                      (p.note && p.note.toLowerCase().includes(s));
+        if (!match) return false;
+      }
+      // Category
+      if (prodCatFilter !== "all") {
+        if (p.category_id !== parseInt(prodCatFilter)) return false;
+      }
+      // Status
+      if (prodStatusFilter === "active" && !p.is_active) return false;
+      if (prodStatusFilter === "disabled" && p.is_active) return false;
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      const q = orderSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        o.item_name.toLowerCase().includes(q) ||
-        (o.buyer_id && o.buyer_id.toString().includes(q)) ||
-        (o.buyer_email && o.buyer_email.toLowerCase().includes(q)) ||
-        o.unique_id.toString().includes(q)
-      );
-    });
-  }, [orders, orderSearch]);
+      // Stock
+      if (prodStockFilter === "instock" && p.stock <= 0) return false;
+      if (prodStockFilter === "lowstock" && (p.stock <= 0 || p.stock > 5)) return false;
+      if (prodStockFilter === "outofstock" && p.stock > 0) return false;
 
-  const filteredPayments = useMemo(() => {
-    return payments.filter((p) => {
-      if (paymentProviderFilter !== "all" && p.provider !== paymentProviderFilter) return false;
-      const q = paymentSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        p.external_id.toLowerCase().includes(q) ||
-        p.provider.toLowerCase().includes(q) ||
-        (p.user_id && p.user_id.toString().includes(q))
-      );
-    });
-  }, [payments, paymentSearch, paymentProviderFilter]);
+      // Badge
+      if (prodBadgeFilter === "featured" && !p.is_featured) return false;
+      if (prodBadgeFilter === "hot" && !p.is_hot) return false;
+      if (prodBadgeFilter === "bestseller" && !p.is_bestseller) return false;
 
-  const filteredAuditLogs = useMemo(() => {
-    return auditLogs.filter((l) => {
-      const q = auditSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        l.action.toLowerCase().includes(q) ||
-        (l.details && l.details.toLowerCase().includes(q)) ||
-        (l.user_id && l.user_id.toString().includes(q))
-      );
+      // Source
+      if (prodSourceFilter === "local" && p.source_type !== "local") return false;
+      if (prodSourceFilter === "reseller" && p.source_type !== "reseller") return false;
+
+      return true;
     });
-  }, [auditLogs, auditSearch]);
+  }, [products, prodSearch, prodCatFilter, prodStatusFilter, prodStockFilter, prodBadgeFilter, prodSourceFilter]);
+
+  if (needsAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 selection:bg-purple-500 selection:text-white relative overflow-hidden font-sans">
+        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[550px] h-[550px] rounded-full bg-purple-600/15 blur-[160px] pointer-events-none -translate-y-1/2" />
+        <div className="fixed bottom-0 right-1/4 w-[400px] h-[400px] rounded-full bg-red-600/10 blur-[140px] pointer-events-none translate-y-1/3" />
+
+        <div className="w-full max-w-md rounded-3xl p-8 bg-neutral-900/90 border border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.25)] relative z-10 backdrop-blur-xl">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-2xl shadow-lg shadow-purple-500/30 mb-3 border border-purple-400/30">
+              ⚡
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-white">
+              KALI ADMIN MASTER
+            </h1>
+            <p className="text-xs text-neutral-400 font-medium mt-1">
+              Protected Control Hub • Master Authentication
+            </p>
+          </div>
+
+          {authError && (
+            <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{authError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-neutral-400 mb-1.5 block">Admin Username / Telegram ID</label>
+              <div className="relative">
+                <Users className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  placeholder="prabin"
+                  value={adminUsername}
+                  onChange={e => setAdminUsername(e.target.value)}
+                  className="w-full bg-neutral-950/80 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-xs font-medium text-white focus:outline-none focus:border-purple-500 transition-all font-mono"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-neutral-400 mb-1.5 block">Master Admin Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  className="w-full bg-neutral-950/80 border border-neutral-800 rounded-xl pl-10 pr-3 py-2.5 text-xs font-medium text-white focus:outline-none focus:border-purple-500 transition-all font-mono"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="w-full py-3 mt-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            >
+              {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <>Unlock Master Control Hub <ArrowUpRight className="w-4 h-4" /></>}
+            </button>
+          </form>
+
+          <div className="mt-6 pt-4 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500">
+            <Link href="/nepal" className="hover:text-purple-400 transition font-medium">
+              ← Return to Live Store
+            </Link>
+            <span className="font-mono text-[10px]">Secure VPS Session</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-muted-foreground text-sm font-medium">Loading Admin Control Center...</p>
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center text-white">
+        <RefreshCw className="w-10 h-10 animate-spin text-purple-500 mb-4" />
+        <p className="text-neutral-400 font-medium tracking-wide">Loading Full-Control Admin Dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
-      {/* Admin Sidebar */}
-      <aside className="w-full md:w-64 glass border-r border-border/50 md:h-screen sticky top-0 flex flex-col z-20">
-        <div className="p-6">
-          {/* Logo */}
-          <Link href="/store" className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-              <Bolt className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-extrabold text-[15px] tracking-tight">KDS <span className="text-primary">Admin</span></span>
-          </Link>
-          {/* Back to Store */}
-          <Link href="/store" className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors mb-6 group">
-            <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-            Back to Store
-          </Link>
-
-          <nav className="space-y-1.5">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "overview"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Overview
-            </button>
-
-            <button
-              onClick={() => setActiveTab("users")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "users"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              Users Directory
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background/30">
-                {users.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("products")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "products"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              Products & Stock
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background/30">
-                {products.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("orders")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "orders"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Orders & Sales
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background/30">
-                {orders.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("payments")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "payments"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              Transactions & TxID
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-background/30">
-                {payments.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("nepal_qr");
-                fetchNepalQrSettings();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "nepal_qr"
-                  ? "bg-red-500 text-white shadow-lg shadow-red-500/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              🇳🇵 Nepal QR Upload
-            </button>
-
-            <button
-              onClick={() => setActiveTab("audit")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === "audit"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4" />
-              Audit Logs
-            </button>
-          </nav>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-purple-500 selection:text-white">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md border animate-in slide-in-from-top duration-300 ${
+          toastMessage.type === "success" 
+            ? "bg-emerald-950/90 text-emerald-200 border-emerald-500/30" 
+            : "bg-rose-950/90 text-rose-200 border-rose-500/30"
+        }`}>
+          {toastMessage.type === "success" ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <AlertTriangle className="w-5 h-5 text-rose-400" />}
+          <span className="font-medium text-sm">{toastMessage.text}</span>
         </div>
+      )}
 
-        <div className="mt-auto p-6 border-t border-border/40 space-y-2">
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            {theme === "dark"
-              ? <><Sun className="w-4 h-4 text-amber-400" /> Light Mode</>
-              : <><Moon className="w-4 h-4 text-indigo-400" /> Dark Mode</>}
-          </button>
-          <Link
-            href="/dashboard"
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-xl transition-colors text-sm font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+      {/* Top Admin Navigation Header */}
+      <header className="sticky top-0 z-40 bg-neutral-900/80 backdrop-blur-xl border-b border-neutral-800 px-6 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/nepal" className="flex items-center gap-2 text-neutral-400 hover:text-white transition group text-sm font-medium">
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span>Live Store</span>
           </Link>
-          <Link
-            href="/store"
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-xl transition-colors text-sm font-medium"
-          >
-            <ExternalLink className="w-4 h-4" /> View Live Store
-          </Link>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl">
-        {/* Top bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight capitalize">
-              {activeTab === "overview" && "Dashboard Overview"}
-              {activeTab === "users" && "Users Directory & Balances"}
-              {activeTab === "products" && "Product Catalog & Inventory"}
-              {activeTab === "orders" && "Sales & Delivered Orders"}
-              {activeTab === "payments" && "Payment Gateway Transactions"}
-              {activeTab === "audit" && "Security & Audit Trail"}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Live automated data sync across Telegram bot and web platform.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadAdminData}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground text-sm font-semibold rounded-xl border border-border transition-all"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin text-primary" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh Data"}
-            </button>
-          </div>
-        </div>
-
-        {/* ── TAB 1: OVERVIEW ──────────────────────────────────────────────── */}
-        {activeTab === "overview" && stats && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Stat metric cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {/* Total Revenue */}
-              <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-full blur-[32px] -translate-y-1/2 translate-x-1/2" />
-                <div className="flex items-center justify-between text-muted-foreground mb-3">
-                  <span className="text-sm font-medium">Total Revenue</span>
-                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                    <DollarSign className="w-5 h-5" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold">${stats.total_sales_usd.toFixed(2)}</h3>
-                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                  <span className="text-emerald-400 font-semibold">+${stats.sales_today_usd.toFixed(2)}</span> today
-                </p>
-              </div>
-
-              {/* Net Profit */}
-              <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-28 h-28 bg-primary/15 rounded-full blur-[32px] -translate-y-1/2 translate-x-1/2" />
-                <div className="flex items-center justify-between text-muted-foreground mb-3">
-                  <span className="text-sm font-medium">Net Profit</span>
-                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold">${stats.total_profit_usd.toFixed(2)}</h3>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Margin: {stats.total_sales_usd > 0 ? ((stats.total_profit_usd / stats.total_sales_usd) * 100).toFixed(1) : 0}%
-                </p>
-              </div>
-
-              {/* Total Orders */}
-              <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-28 h-28 bg-blue-500/10 rounded-full blur-[32px] -translate-y-1/2 translate-x-1/2" />
-                <div className="flex items-center justify-between text-muted-foreground mb-3">
-                  <span className="text-sm font-medium">Total Orders</span>
-                  <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
-                    <ShoppingCart className="w-5 h-5" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold">{stats.total_orders}</h3>
-                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                  <span className="text-blue-400 font-semibold">+{stats.orders_today}</span> completed today
-                </p>
-              </div>
-
-              {/* Registered Users */}
-              <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-28 h-28 bg-purple-500/10 rounded-full blur-[32px] -translate-y-1/2 translate-x-1/2" />
-                <div className="flex items-center justify-between text-muted-foreground mb-3">
-                  <span className="text-sm font-medium">Total Users</span>
-                  <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-                    <Users className="w-5 h-5" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-bold">{stats.total_users}</h3>
-                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                  <span className="text-purple-400 font-semibold">+{stats.new_users_today}</span> joined today
-                </p>
-              </div>
+          <div className="h-4 w-px bg-neutral-800" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-purple-500/20">
+              ⚡
             </div>
-
-            {/* Sub stats row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="glass-card p-6 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Active Catalog Items</p>
-                  <h4 className="text-2xl font-bold mt-1">{stats.total_products} items</h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stats.in_stock_products} products with ready stock
-                  </p>
-                </div>
-                <div className="p-3 rounded-2xl bg-secondary text-primary">
-                  <Package className="w-6 h-6" />
-                </div>
-              </div>
-
-              <div className="glass-card p-6 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Successful Top-Up Volume</p>
-                  <h4 className="text-2xl font-bold mt-1">${stats.succeeded_payments_volume.toFixed(2)}</h4>
-                  <p className="text-xs text-muted-foreground mt-1">All crypto & Bybit deposits</p>
-                </div>
-                <div className="p-3 rounded-2xl bg-secondary text-emerald-400">
-                  <CreditCard className="w-6 h-6" />
-                </div>
-              </div>
-
-              <div className="glass-card p-6 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending Verifications</p>
-                  <h4 className="text-2xl font-bold mt-1">{stats.pending_payments} pending</h4>
-                  <p className="text-xs text-muted-foreground mt-1">Awaiting confirmation or review</p>
-                </div>
-                <div className="p-3 rounded-2xl bg-secondary text-amber-400">
-                  <Clock className="w-6 h-6" />
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Recent Activity Columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Orders */}
-              <div className="glass-card p-6 rounded-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold">Recent Purchases</h3>
-                  <button
-                    onClick={() => setActiveTab("orders")}
-                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                  >
-                    View all <ArrowUpRight className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {orders.slice(0, 5).map((o) => (
-                    <div key={o.id} className="p-3 rounded-xl bg-secondary/50 flex items-center justify-between text-sm">
-                      <div>
-                        <p className="font-semibold text-foreground">{o.item_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Buyer: {o.buyer_email || o.buyer_id} · {new Date(o.bought_datetime).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span className="font-bold text-emerald-400">${o.price.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recent Payments */}
-              <div className="glass-card p-6 rounded-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold">Recent Top-Ups</h3>
-                  <button
-                    onClick={() => setActiveTab("payments")}
-                    className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                  >
-                    View all <ArrowUpRight className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {payments.slice(0, 5).map((p) => (
-                    <div key={p.id} className="p-3 rounded-xl bg-secondary/50 flex items-center justify-between text-sm">
-                      <div>
-                        <p className="font-semibold text-foreground uppercase tracking-wider text-xs">
-                          {p.provider} · <span className="text-muted-foreground font-mono text-xs">{p.external_id.slice(0, 16)}...</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">User: {p.user_id}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-primary">${p.amount.toFixed(2)}</p>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.status === "succeeded"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : p.status === "pending"
-                              ? "bg-amber-500/10 text-amber-400"
-                              : "bg-destructive/10 text-destructive"
-                          }`}
-                        >
-                          {p.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 2: USERS DIRECTORY ───────────────────────────────────────── */}
-        {activeTab === "users" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Search toolbar */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search Telegram ID, email, role..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground font-medium">
-                Showing {filteredUsers.length} of {users.length} users
+            <div>
+              <h1 className="font-bold text-base tracking-tight bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
+                KALI ADMIN MASTER
+              </h1>
+              <p className="text-[11px] text-neutral-500 font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Control Hub • VPS Connected
               </p>
             </div>
+          </div>
+        </div>
 
-            {/* Users Table */}
-            <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">User / ID</th>
-                      <th className="px-5 py-3 font-semibold">Role</th>
-                      <th className="px-5 py-3 font-semibold">Balance</th>
-                      <th className="px-5 py-3 font-semibold">Purchases</th>
-                      <th className="px-5 py-3 font-semibold">Discount</th>
-                      <th className="px-5 py-3 font-semibold">Joined</th>
-                      <th className="px-5 py-3 font-semibold">Status</th>
-                      <th className="px-5 py-3 font-semibold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredUsers.map((u) => (
-                      <tr key={u.telegram_id} className="hover:bg-accent/40 transition-colors">
-                        <td className="px-5 py-4">
-                          <div className="font-semibold text-foreground">{u.email || `User #${u.telegram_id}`}</div>
-                          <div className="text-xs text-muted-foreground font-mono">ID: {u.telegram_id}</div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                              u.role_name === "OWNER"
-                                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                                : u.role_name === "ADMIN"
-                                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                                : "bg-secondary text-muted-foreground"
-                            }`}
-                          >
-                            {u.role_name}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 font-bold text-foreground">
-                          ${u.balance.toFixed(2)}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="font-medium text-foreground">{u.purchases_count}</span>
-                          <span className="text-xs text-muted-foreground ml-1">(${u.total_spent.toFixed(2)})</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          {u.discount_percent > 0 ? (
-                            <span className="text-primary font-bold">{u.discount_percent}%</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-xs text-muted-foreground">
-                          {u.registration_date ? new Date(u.registration_date).toLocaleDateString() : "—"}
-                        </td>
-                        <td className="px-5 py-4">
-                          {u.is_blocked ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-destructive/15 text-destructive">
-                              Blocked
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400">
-                              Active
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setBalanceModalUser(u)}
-                              className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" /> Adjust Balance
-                            </button>
-                            <button
-                              onClick={() => handleToggleBlock(u)}
-                              className={`p-1.5 rounded-lg text-xs transition-colors ${
-                                u.is_blocked
-                                  ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                                  : "bg-destructive/10 text-destructive hover:bg-destructive/20"
-                              }`}
-                              title={u.is_blocked ? "Unblock user" : "Block user"}
-                            >
-                              {u.is_blocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        <div className="flex items-center gap-3">
+          {pendingNepal.length > 0 && (
+            <button
+              onClick={() => setActiveTab("payments")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition animate-pulse"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>{pendingNepal.length} Pending Nepal QR</span>
+            </button>
+          )}
+
+          <button
+            onClick={loadAllData}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition border border-neutral-700/60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-purple-400" : ""}`} />
+            <span>Sync</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Layout Container */}
+      <div className="flex-1 flex flex-col lg:flex-row">
+        {/* Navigation Sidebar */}
+        <aside className="w-full lg:w-64 bg-neutral-900/40 border-r border-neutral-800/80 p-4 flex flex-row lg:flex-col gap-1.5 overflow-x-auto">
+          {[
+            { id: "overview", label: "Overview", icon: LayoutDashboard, badge: null },
+            { id: "products", label: "Products & Stock", icon: Package, badge: products.length },
+            { id: "categories", label: "Categories", icon: Layers, badge: categories.length },
+            { id: "payments", label: "Payments & QR", icon: CreditCard, badge: pendingNepal.length > 0 ? pendingNepal.length : null, badgeColor: "bg-amber-500 text-neutral-950 font-bold" },
+            { id: "orders", label: "Orders Log", icon: ShoppingCart, badge: orders.length },
+            { id: "users", label: "Customers", icon: Users, badge: users.length },
+            { id: "budget", label: "Budget & Wallets", icon: Wallet, badge: resellerBudget ? `$${resellerBudget.total_balance_usd.toFixed(0)}` : null, badgeColor: "bg-emerald-950 text-emerald-300 border border-emerald-500/30 font-bold" },
+            { id: "promocodes", label: "Promocodes", icon: Tag, badge: promocodes.length },
+            { id: "settings", label: "Store & Geo Settings", icon: Bolt, badge: null },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+                  isActive
+                    ? "bg-purple-600/15 text-purple-300 border border-purple-500/30 shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 ${isActive ? "text-purple-400" : "text-neutral-500"}`} />
+                  <span>{tab.label}</span>
+                </div>
+                {tab.badge !== null && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${tab.badgeColor || "bg-neutral-800 text-neutral-400"}`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </aside>
+
+        {/* Dynamic Tab Body */}
+        <main className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full overflow-hidden">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === "overview" && stats && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-xl font-bold text-white">Performance Overview</h2>
+                <p className="text-xs text-neutral-400">Real-time store metrics, gross sales, and customer activity</p>
+              </div>
+
+              {/* KPI Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: "Total Gross Revenue", value: `$${stats.total_sales_usd.toFixed(2)}`, sub: `Today: $${stats.sales_today_usd.toFixed(2)}`, icon: DollarSign, color: "from-emerald-500/20 to-emerald-500/5", border: "border-emerald-500/30", text: "text-emerald-400" },
+                  { label: "Net Est. Profit", value: `$${stats.total_profit_usd.toFixed(2)}`, sub: "Wholesale Margin Adjusted", icon: TrendingUp, color: "from-purple-500/20 to-purple-500/5", border: "border-purple-500/30", text: "text-purple-400" },
+                  { label: "Total Orders Completed", value: stats.total_orders, sub: `Today: ${stats.orders_today} orders`, icon: ShoppingCart, color: "from-blue-500/20 to-blue-500/5", border: "border-blue-500/30", text: "text-blue-400" },
+                  { label: "Registered Customers", value: stats.total_users, sub: `New today: +${stats.new_users_today}`, icon: Users, color: "from-indigo-500/20 to-indigo-500/5", border: "border-indigo-500/30", text: "text-indigo-400" },
+                ].map((kpi, idx) => {
+                  const Icon = kpi.icon;
+                  return (
+                    <div key={idx} className={`bg-gradient-to-b ${kpi.color} p-5 rounded-2xl border ${kpi.border} backdrop-blur-sm relative overflow-hidden`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-neutral-400">{kpi.label}</span>
+                        <div className={`p-2 rounded-xl bg-neutral-900/60 ${kpi.text}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-bold text-white tracking-tight">{kpi.value}</div>
+                      <p className="text-[11px] text-neutral-500 mt-1 font-mono">{kpi.sub}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Quick Actions Strip */}
+              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-6">
+                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                  <Bolt className="w-4 h-4 text-purple-400" />
+                  <span>Master Shortcuts & Quick Operations</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  <button
+                    onClick={() => { setActiveTab("products"); setIsAddProductOpen(true); }}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-left border border-neutral-700/50 transition group"
+                  >
+                    <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white">Add New Product</div>
+                      <div className="text-[10px] text-neutral-400">Add local item with keys</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("products"); setIsBulkPriceOpen(true); }}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-left border border-neutral-700/50 transition group"
+                  >
+                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition">
+                      <Percent className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white">Bulk Price Adjust</div>
+                      <div className="text-[10px] text-neutral-400">Modify category pricing %</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("payments")}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-left border border-neutral-700/50 transition group"
+                  >
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition">
+                      <QrCode className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white">Verify Nepal QR</div>
+                      <div className="text-[10px] text-neutral-400">{pendingNepal.length} pending review</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("settings")}
+                    className="flex items-center gap-3 p-3.5 rounded-xl bg-neutral-800/60 hover:bg-neutral-800 text-left border border-neutral-700/50 transition group"
+                  >
+                    <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white">Store & Geo Rules</div>
+                      <div className="text-[10px] text-neutral-400">NPR rate & IP filter</div>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── TAB 3: PRODUCTS & CATALOG ────────────────────────────────────── */}
-        {activeTab === "products" && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Categories section */}
-            <div className="glass-card p-6 rounded-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-primary" /> Store Categories
-                </h3>
+          {/* TAB 2: PRODUCTS & STOCK MANAGER */}
+          {activeTab === "products" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              {/* Header Bar with Action Buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2.5">
+                    <span>Products & Catalog Master</span>
+                    <span className="text-xs font-mono font-medium px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/30 text-purple-300">
+                      {filteredProducts.length} Items
+                    </span>
+                  </h2>
+                  <p className="text-xs text-neutral-400 mt-0.5">Control pricing, active visibility, badges, and digital keys stock</p>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setIsBulkPriceOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-semibold hover:bg-emerald-900/60 transition"
+                  >
+                    <Percent className="w-3.5 h-3.5" />
+                    <span>Bulk Price Tool</span>
+                  </button>
+                  <button
+                    onClick={() => setIsAddProductOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Product</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Comprehensive Multi-Filter Bar */}
+              <div className="bg-neutral-900/70 border border-neutral-800 p-4 rounded-2xl space-y-3">
+                <div className="flex flex-col md:flex-row items-center gap-3">
+                  {/* Search */}
+                  <div className="relative flex-1 w-full">
+                    <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search items by name, ID, or keywords..."
+                      value={prodSearch}
+                      onChange={e => setProdSearch(e.target.value)}
+                      className="w-full pl-9.5 pr-4 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-purple-500 transition"
+                    />
+                    {prodSearch && (
+                      <button onClick={() => setProdSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Selector */}
+                  <select
+                    value={prodCatFilter}
+                    onChange={e => setProdCatFilter(e.target.value)}
+                    className="w-full md:w-48 py-2 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-neutral-200 focus:outline-none focus:border-purple-500 transition"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id.toString()}>{c.name}</option>
+                    ))}
+                    <option value="999">⚡ Wholesale Reseller APIs</option>
+                  </select>
+
+                  {/* Status Filter */}
+                  <select
+                    value={prodStatusFilter}
+                    onChange={e => setProdStatusFilter(e.target.value as any)}
+                    className="w-full md:w-36 py-2 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-neutral-200 focus:outline-none focus:border-purple-500 transition"
+                  >
+                    <option value="all">Status: All</option>
+                    <option value="active">🟢 Active Only</option>
+                    <option value="disabled">🔴 Disabled Only</option>
+                  </select>
+                </div>
+
+                {/* Second Row: Stock, Badges, Source */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-neutral-800/60">
+                  <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider mr-1">Filter:</span>
+                  
+                  {/* Stock Pills */}
+                  {[
+                    { id: "all", label: "All Stock" },
+                    { id: "instock", label: "In Stock" },
+                    { id: "lowstock", label: "Low Stock (<5)" },
+                    { id: "outofstock", label: "Out of Stock" }
+                  ].map(pill => (
+                    <button
+                      key={pill.id}
+                      onClick={() => setProdStockFilter(pill.id as any)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                        prodStockFilter === pill.id
+                          ? "bg-purple-950/60 border-purple-500/50 text-purple-300 font-semibold"
+                          : "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+
+                  <div className="h-3 w-px bg-neutral-800 mx-1" />
+
+                  {/* Badge Pills */}
+                  {[
+                    { id: "all", label: "All Badges" },
+                    { id: "featured", label: "⭐ Featured" },
+                    { id: "hot", label: "🔥 Hot" },
+                    { id: "bestseller", label: "👑 Best Seller" },
+                  ].map(pill => (
+                    <button
+                      key={pill.id}
+                      onClick={() => setProdBadgeFilter(pill.id as any)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                        prodBadgeFilter === pill.id
+                          ? "bg-indigo-950/60 border-indigo-500/50 text-indigo-300 font-semibold"
+                          : "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+
+                  <div className="h-3 w-px bg-neutral-800 mx-1" />
+
+                  {/* Source Pills */}
+                  {[
+                    { id: "all", label: "All Sources" },
+                    { id: "local", label: "📦 Local Inventory" },
+                    { id: "reseller", label: "🌐 Reseller API" },
+                  ].map(pill => (
+                    <button
+                      key={pill.id}
+                      onClick={() => setProdSourceFilter(pill.id as any)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                        prodSourceFilter === pill.id
+                          ? "bg-neutral-800 border-neutral-600 text-white font-semibold"
+                          : "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+
+                  {(prodSearch || prodCatFilter !== "all" || prodStatusFilter !== "all" || prodStockFilter !== "all" || prodBadgeFilter !== "all" || prodSourceFilter !== "all") && (
+                    <button
+                      onClick={() => {
+                        setProdSearch("");
+                        setProdCatFilter("all");
+                        setProdStatusFilter("all");
+                        setProdStockFilter("all");
+                        setProdBadgeFilter("all");
+                        setProdSourceFilter("all");
+                      }}
+                      className="text-[11px] text-purple-400 hover:underline ml-auto font-medium"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Products List Table / Cards */}
+              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="py-3 px-4">Item & Category</th>
+                        <th className="py-3 px-4">Price (USD / NPR)</th>
+                        <th className="py-3 px-4">Cost & Margin</th>
+                        <th className="py-3 px-4">Stock</th>
+                        <th className="py-3 px-4">Badges & Highlights</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {filteredProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="text-center py-12 text-neutral-500">
+                            No products match the selected criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProducts.map(prod => {
+                          const nprPrice = Math.round(prod.price * (settings.npr_exchange_rate || 135));
+                          const margin = prod.cost_price > 0 ? (((prod.price - prod.cost_price) / prod.price) * 100).toFixed(0) : "100";
+                          const isEditingPrice = inlinePriceId === prod.id;
+
+                          return (
+                            <tr key={prod.id} className="hover:bg-neutral-800/30 transition group">
+                              {/* Product Info */}
+                              <td className="py-3.5 px-4">
+                                <div className="font-semibold text-white group-hover:text-purple-300 transition text-sm">
+                                  {prod.name}
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-400 font-medium">
+                                    {prod.category_name}
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono ${
+                                    prod.source_type === "local" 
+                                      ? "bg-purple-950/60 text-purple-300 border border-purple-500/30" 
+                                      : "bg-blue-950/60 text-blue-300 border border-blue-500/30"
+                                  }`}>
+                                    {prod.source_name || prod.source_type}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Price Edit */}
+                              <td className="py-3.5 px-4">
+                                {isEditingPrice ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-neutral-500">$</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      autoFocus
+                                      value={inlinePriceVal}
+                                      onChange={e => setInlinePriceVal(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") handleSaveInlinePrice(prod);
+                                        if (e.key === "Escape") setInlinePriceId(null);
+                                      }}
+                                      className="w-20 px-2 py-1 bg-neutral-950 border border-purple-500 rounded text-xs text-white focus:outline-none"
+                                    />
+                                    <button
+                                      onClick={() => handleSaveInlinePrice(prod)}
+                                      className="p-1 rounded bg-purple-600 text-white hover:bg-purple-500"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setInlinePriceId(null)}
+                                      className="p-1 rounded bg-neutral-800 text-neutral-400 hover:text-white"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={() => {
+                                      setInlinePriceId(prod.id);
+                                      setInlinePriceVal(prod.price.toString());
+                                    }}
+                                    className="cursor-pointer group/price flex items-baseline gap-2"
+                                    title="Click to edit price"
+                                  >
+                                    <span className="font-bold text-white text-sm group-hover/price:text-purple-400 transition">
+                                      ${prod.price.toFixed(2)}
+                                    </span>
+                                    <span className="text-[11px] text-neutral-500 font-mono">
+                                      (Rs {nprPrice.toLocaleString()})
+                                    </span>
+                                    <Edit3 className="w-3 h-3 text-neutral-600 opacity-0 group-hover/price:opacity-100 transition" />
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Cost & Margin */}
+                              <td className="py-3.5 px-4 font-mono">
+                                <div className="text-neutral-400 text-xs">
+                                  ${prod.cost_price.toFixed(2)}
+                                </div>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                  parseInt(margin) >= 30 ? "text-emerald-400 bg-emerald-950/60" : "text-amber-400 bg-amber-950/60"
+                                }`}>
+                                  {margin}% Margin
+                                </span>
+                              </td>
+
+                              {/* Stock */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2.5 py-1 rounded-lg font-mono font-semibold text-xs ${
+                                    prod.stock > 5 
+                                      ? "bg-emerald-950/60 text-emerald-300 border border-emerald-500/30" 
+                                      : prod.stock > 0 
+                                      ? "bg-amber-950/60 text-amber-300 border border-amber-500/30"
+                                      : "bg-rose-950/60 text-rose-300 border border-rose-500/30"
+                                  }`}>
+                                    {prod.stock} left
+                                  </span>
+                                  {prod.source_type === "local" && (
+                                    <button
+                                      onClick={() => handleOpenStockModal(prod)}
+                                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
+                                      title="Manage Stock Keys"
+                                    >
+                                      <Key className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Badges Toggles */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => handleToggleProductBadge(prod, "featured")}
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      prod.is_featured 
+                                        ? "bg-amber-500/20 border-amber-500/40 text-amber-300" 
+                                        : "bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400"
+                                    }`}
+                                    title="Toggle Featured"
+                                  >
+                                    <Star className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleProductBadge(prod, "hot")}
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      prod.is_hot 
+                                        ? "bg-rose-500/20 border-rose-500/40 text-rose-300" 
+                                        : "bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400"
+                                    }`}
+                                    title="Toggle Hot"
+                                  >
+                                    <Flame className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleProductBadge(prod, "bestseller")}
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      prod.is_bestseller 
+                                        ? "bg-purple-500/20 border-purple-500/40 text-purple-300" 
+                                        : "bg-neutral-900 border-neutral-800 text-neutral-600 hover:text-neutral-400"
+                                    }`}
+                                    title="Toggle Best Seller"
+                                  >
+                                    <Award className="w-3.5 h-3.5" />
+                                  </button>
+                                  {prod.badge_text && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 font-semibold">
+                                      {prod.badge_text}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Active Status Switch */}
+                              <td className="py-3.5 px-4">
+                                <button
+                                  onClick={() => handleToggleProductActive(prod)}
+                                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                    prod.is_active ? "bg-emerald-600" : "bg-neutral-700"
+                                  }`}
+                                  title={prod.is_active ? "Click to Disable" : "Click to Enable"}
+                                >
+                                  <span
+                                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                      prod.is_active ? "translate-x-4.5" : "translate-x-1"
+                                    }`}
+                                  />
+                                </button>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditingProduct(prod);
+                                      setIsEditProductOpen(true);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
+                                    title="Edit Product"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(prod)}
+                                    className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 transition border border-rose-500/20"
+                                    title="Delete Product"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: CATEGORIES */}
+          {activeTab === "categories" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Categories Management</h2>
+                  <p className="text-xs text-neutral-400">Add, rename, enable/disable store categories</p>
+                </div>
                 <button
                   onClick={() => setIsAddCategoryOpen(true)}
-                  className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs rounded-xl transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition"
                 >
-                  + Add Category
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Category</span>
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {categories.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="p-4 rounded-xl bg-secondary/50 border border-border/50 flex items-center justify-between"
-                  >
-                    <div>
-                      <h4 className="font-bold text-sm text-foreground">{cat.name}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">{cat.products_count} items</p>
-                    </div>
-                    <div className="flex items-center gap-2">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {categories.map(cat => (
+                  <div key={cat.id} className="bg-neutral-900/60 border border-neutral-800 p-5 rounded-2xl flex flex-col justify-between">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-white text-base">{cat.name}</h3>
+                        <p className="text-xs text-neutral-500 mt-1 font-mono">{cat.products_count} Active Products</p>
+                      </div>
                       <button
-                        onClick={() => handleToggleCategory(cat)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
-                          cat.is_active
-                            ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        onClick={() => handleToggleCategoryActive(cat)}
+                        className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition ${
+                          cat.is_active 
+                            ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300" 
+                            : "bg-rose-950/60 border-rose-500/40 text-rose-300"
                         }`}
                       >
-                        {cat.is_active ? "Active" : "Disabled"}
+                        {cat.is_active ? "VISIBLE" : "HIDDEN"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-neutral-800/80">
+                      <button
+                        onClick={() => {
+                          setEditingCategory(cat);
+                          setIsEditCategoryOpen(true);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition"
+                      >
+                        Rename
                       </button>
                       <button
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        className="text-xs text-rose-400 hover:text-rose-300 p-1"
-                        title="Delete category"
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 text-xs font-medium transition border border-rose-500/20"
                       >
-                        ✕
+                        Delete
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Products table */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-                <div className="relative w-full sm:w-80">
-                  <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search product name or category..."
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className="w-full bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-                  />
+          {/* TAB 4: PAYMENTS & NEPAL QR APPROVALS */}
+          {activeTab === "payments" && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Pending Nepal QR Section */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <QrCode className="w-5 h-5 text-amber-400" />
+                      <span>Pending Nepal QR Payment Submissions</span>
+                      <span className="text-xs font-mono font-medium px-2.5 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300">
+                        {pendingNepal.length} Pending
+                      </span>
+                    </h2>
+                    <p className="text-xs text-neutral-400">Review eSewa / Fonepay customer receipts and 1-click verify</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      if (categories.length > 0) setNewProdCatId(categories[0].id);
-                      setIsAddProductOpen(true);
-                    }}
-                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center gap-1.5"
-                  >
-                    + Add New Product
-                  </button>
-                  <p className="text-xs text-muted-foreground font-medium">
-                    {filteredProducts.length} items
-                  </p>
-                </div>
+
+                {pendingNepal.length === 0 ? (
+                  <div className="bg-neutral-900/40 border border-neutral-800/80 rounded-2xl p-8 text-center">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-60" />
+                    <p className="text-sm text-neutral-400 font-medium">All Nepal QR payment submissions are verified and cleared!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {pendingNepal.map(sub => (
+                      <div key={sub.id} className="bg-neutral-900/70 border border-amber-500/30 p-5 rounded-2xl space-y-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="text-xs font-mono font-bold text-amber-300">TX: {sub.tx_id}</span>
+                            <p className="text-[11px] text-neutral-400 mt-0.5">
+                              {sub.user_email || `User #${sub.user_id}`}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-base font-bold text-white">Rs {sub.amount_npr.toLocaleString()}</div>
+                            <div className="text-[11px] text-neutral-400 font-mono">(${sub.amount_usd.toFixed(2)} USD)</div>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-neutral-400 bg-neutral-950 p-2.5 rounded-xl border border-neutral-800 font-mono">
+                          Submitted: {new Date(sub.created_at).toLocaleString()}
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
+                          <button
+                            onClick={() => handleApprovePayment(sub.payment_id)}
+                            className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/20"
+                          >
+                            ✅ Approve & Credit
+                          </button>
+                          <button
+                            onClick={() => handleRejectPayment(sub.payment_id)}
+                            className="py-2 px-3 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-xs font-semibold border border-rose-500/30 transition"
+                          >
+                            ❌ Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
+              {/* General Payment Transactions Table */}
+              <div>
+                <h3 className="text-lg font-bold text-white mb-3">All Transaction Records</h3>
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 uppercase text-[10px]">
                       <tr>
-                        <th className="px-5 py-3 font-semibold">Product Name</th>
-                        <th className="px-5 py-3 font-semibold">Category</th>
-                        <th className="px-5 py-3 font-semibold">Sell Price</th>
-                        <th className="px-5 py-3 font-semibold">Cost Price</th>
-                        <th className="px-5 py-3 font-semibold">Margin</th>
-                        <th className="px-5 py-3 font-semibold">Stock / Values</th>
-                        <th className="px-5 py-3 font-semibold">Featured</th>
-                        <th className="px-5 py-3 font-semibold text-right">Actions</th>
+                        <th className="py-3 px-4">Provider / Method</th>
+                        <th className="py-3 px-4">Customer</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/40">
-                      {filteredProducts.map((p) => {
-                        const margin =
-                          p.price > 0 ? (((p.price - p.cost_price) / p.price) * 100).toFixed(0) : "0";
-                        return (
-                          <tr key={p.id} className="hover:bg-accent/40 transition-colors">
-                            <td className="px-5 py-4 font-bold text-foreground">
-                              {p.name}
-                              {p.warranty && (
-                                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-normal">
-                                  {p.warranty}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4 text-muted-foreground">{p.category_name}</td>
-                            <td className="px-5 py-4 font-bold text-primary">${p.price.toFixed(2)}</td>
-                            <td className="px-5 py-4 text-muted-foreground">${p.cost_price.toFixed(2)}</td>
-                            <td className="px-5 py-4 font-semibold text-emerald-400">{margin}%</td>
-                            <td className="px-5 py-4">
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                  p.stock > 0
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : "bg-destructive/10 text-destructive"
-                                }`}
-                              >
-                                {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4">
-                              <button
-                                onClick={() => handleToggleFeatured(p)}
-                                className={`text-xs font-bold px-2 py-0.5 rounded transition-colors ${
-                                  p.is_featured
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                                }`}
-                              >
-                                {p.is_featured ? "⭐ Featured" : "Standard"}
-                              </button>
-                            </td>
-                            <td className="px-5 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => setAddKeysProduct(p)}
-                                  className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded text-xs font-bold transition-colors"
-                                  title="Bulk add license keys / accounts"
-                                >
-                                  + Add Keys
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(p.id)}
-                                  className="p-1 text-rose-400 hover:text-rose-300 text-xs font-bold"
-                                  title="Delete product"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {payments.map(p => (
+                        <tr key={p.id} className="hover:bg-neutral-800/30 transition">
+                          <td className="py-3 px-4 font-mono uppercase text-purple-300 font-medium">
+                            {p.provider}
+                          </td>
+                          <td className="py-3 px-4 text-neutral-300">
+                            {p.user_email || `User #${p.user_id}`}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-white">
+                            ${p.amount.toFixed(2)} {p.currency}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase ${
+                              p.status === "succeeded" 
+                                ? "bg-emerald-950 text-emerald-300 border border-emerald-500/30" 
+                                : p.status === "pending"
+                                ? "bg-amber-950 text-amber-300 border border-amber-500/30"
+                                : "bg-rose-950 text-rose-300 border border-rose-500/30"
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-neutral-500 font-mono text-[11px]">
+                            {new Date(p.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── TAB 4: ORDERS & SALES ────────────────────────────────────────── */}
-        {activeTab === "orders" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search buyer, item, order ID..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-                />
+          {/* TAB 5: ORDERS LOG */}
+          {activeTab === "orders" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-xl font-bold text-white">Delivered Orders & Fulfillment Log</h2>
+                <p className="text-xs text-neutral-400">View customer purchases, item delivery credentials, and profit margins</p>
               </div>
-              <p className="text-xs text-muted-foreground font-medium">
-                {filteredOrders.length} completed purchases recorded
-              </p>
-            </div>
 
-            <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
+              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 uppercase text-[10px]">
                     <tr>
-                      <th className="px-5 py-3 font-semibold">Order ID</th>
-                      <th className="px-5 py-3 font-semibold">Item Name</th>
-                      <th className="px-5 py-3 font-semibold">Buyer</th>
-                      <th className="px-5 py-3 font-semibold">Price</th>
-                      <th className="px-5 py-3 font-semibold">Profit</th>
-                      <th className="px-5 py-3 font-semibold">Delivered Key / Content</th>
-                      <th className="px-5 py-3 font-semibold text-right">Date</th>
+                      <th className="py-3 px-4">Order ID</th>
+                      <th className="py-3 px-4">Product Name</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Price / Profit</th>
+                      <th className="py-3 px-4">Delivery Value</th>
+                      <th className="py-3 px-4">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredOrders.map((o) => (
-                      <tr key={o.id} className="hover:bg-accent/40 transition-colors">
-                        <td className="px-5 py-4 font-mono text-xs text-primary font-bold">
-                          #{o.unique_id}
+                  <tbody className="divide-y divide-neutral-800/60">
+                    {orders.map(ord => (
+                      <tr key={ord.id} className="hover:bg-neutral-800/30 transition">
+                        <td className="py-3 px-4 font-mono text-neutral-400">#{ord.unique_id}</td>
+                        <td className="py-3 px-4 font-semibold text-white">{ord.item_name}</td>
+                        <td className="py-3 px-4 text-neutral-300">{ord.buyer_email || `User #${ord.buyer_id}`}</td>
+                        <td className="py-3 px-4 font-mono">
+                          <span className="font-bold text-emerald-400">${ord.price.toFixed(2)}</span>
+                          <span className="text-[10px] text-neutral-500 ml-1">(+${ord.profit.toFixed(2)})</span>
                         </td>
-                        <td className="px-5 py-4 font-semibold text-foreground">{o.item_name}</td>
-                        <td className="px-5 py-4">
-                          <span className="font-medium text-foreground">{o.buyer_email || o.buyer_id}</span>
-                        </td>
-                        <td className="px-5 py-4 font-bold text-foreground">${o.price.toFixed(2)}</td>
-                        <td className="px-5 py-4 font-semibold text-emerald-400">+${o.profit.toFixed(2)}</td>
-                        <td className="px-5 py-4">
+                        <td className="py-3 px-4">
                           <button
-                            onClick={() => setSelectedSecret({ title: o.item_name, content: o.value })}
-                            className="px-2.5 py-1 bg-secondary hover:bg-secondary/80 text-foreground rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border border-border/50"
+                            onClick={() => {
+                              setSelectedOrderCredentials(ord.value);
+                              setIsOrderCredentialsOpen(true);
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-mono"
                           >
-                            <Eye className="w-3 h-3 text-primary" /> View Key / Account
+                            <Eye className="w-3 h-3 text-purple-400" />
+                            <span>View Keys</span>
                           </button>
                         </td>
-                        <td className="px-5 py-4 text-xs text-muted-foreground text-right whitespace-nowrap">
-                          {o.bought_datetime ? new Date(o.bought_datetime).toLocaleString() : "—"}
+                        <td className="py-3 px-4 text-neutral-500 font-mono text-[11px]">
+                          {new Date(ord.bought_datetime).toLocaleString()}
                         </td>
                       </tr>
                     ))}
@@ -1260,815 +1907,1782 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── TAB 5: PAYMENTS & TXID ────────────────────────────────────────── */}
-        {activeTab === "payments" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Filter toolbar */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search TxID, User ID, provider..."
-                    value={paymentSearch}
-                    onChange={(e) => setPaymentSearch(e.target.value)}
-                    className="w-full bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-                  />
+          {/* TAB 6: CUSTOMERS / USERS */}
+          {activeTab === "users" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    <span>Customer Accounts & Wallets</span>
+                    <span className="text-xs font-mono font-medium px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300">
+                      {users.length} Total
+                    </span>
+                  </h2>
+                  <p className="text-xs text-neutral-400">Click column headers to sort by balance, purchases, total spend, or registration date</p>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 uppercase text-[10px]">
+                      <tr>
+                        <th 
+                          onClick={() => toggleUserSort("telegram_id")}
+                          className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>User ID / Email</span>
+                            {userSortField === "telegram_id" ? (userSortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-purple-400" /> : <ArrowDown className="w-3 h-3 text-purple-400" />) : <ArrowUpDown className="w-3 h-3 text-neutral-600" />}
+                          </div>
+                        </th>
+                        <th className="py-3.5 px-4">Role</th>
+                        <th 
+                          onClick={() => toggleUserSort("balance")}
+                          className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>Wallet Balance</span>
+                            {userSortField === "balance" ? (userSortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-purple-400" /> : <ArrowDown className="w-3 h-3 text-purple-400" />) : <ArrowUpDown className="w-3 h-3 text-neutral-600" />}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => toggleUserSort("total_spent")}
+                          className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>Purchases / Total Spent</span>
+                            {userSortField === "total_spent" || userSortField === "purchases_count" ? (userSortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-purple-400" /> : <ArrowDown className="w-3 h-3 text-purple-400" />) : <ArrowUpDown className="w-3 h-3 text-neutral-600" />}
+                          </div>
+                        </th>
+                        <th 
+                          onClick={() => toggleUserSort("registration_date")}
+                          className="py-3.5 px-4 cursor-pointer hover:text-white transition select-none"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>Registered</span>
+                            {userSortField === "registration_date" ? (userSortOrder === "asc" ? <ArrowUp className="w-3 h-3 text-purple-400" /> : <ArrowDown className="w-3 h-3 text-purple-400" />) : <ArrowUpDown className="w-3 h-3 text-neutral-600" />}
+                          </div>
+                        </th>
+                        <th className="py-3.5 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60 font-sans">
+                      {sortedUsers.map(u => (
+                        <tr key={u.telegram_id} className="hover:bg-neutral-800/30 transition">
+                          <td className="py-3.5 px-4">
+                            <div className="font-semibold text-white">{u.email || `User #${u.telegram_id}`}</div>
+                            <div className="text-[10px] text-neutral-500 font-mono">TG ID: {u.telegram_id}</div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              u.role_name === "ADMIN" ? "bg-purple-950 text-purple-300 border border-purple-500/30" : "bg-neutral-800 text-neutral-400"
+                            }`}>
+                              {u.role_name}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-emerald-400 text-sm">
+                            ${u.balance.toFixed(2)}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono">
+                            <span className="text-white font-semibold">{u.purchases_count} items</span>
+                            <span className="text-neutral-400 ml-1.5 font-bold">(${u.total_spent.toFixed(2)})</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-neutral-400 font-mono text-[11px]">
+                            {u.registration_date ? new Date(u.registration_date).toLocaleDateString() : "N/A"}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleOpenUserPurchases(u)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-950/60 hover:bg-purple-900/60 text-purple-300 text-xs font-medium border border-purple-500/30 transition shadow-sm"
+                                title="View item deliveries & full purchase ledger"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                                <span>Purchases ({u.purchases_count})</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setBalanceUser(u);
+                                  setIsBalanceModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 text-xs font-medium border border-emerald-500/30 transition"
+                              >
+                                Adjust $
+                              </button>
+                              <button
+                                onClick={() => handleToggleUserBlock(u)}
+                                className={`p-1.5 rounded-lg border transition ${
+                                  u.is_blocked 
+                                    ? "bg-rose-950/60 border-rose-500/40 text-rose-300" 
+                                    : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white"
+                                }`}
+                                title={u.is_blocked ? "Unblock User" : "Block User"}
+                              >
+                                {u.is_blocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: RESELLER API BUDGET & WALLET TRACKING */}
+          {activeTab === "budget" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-400" />
+                    <span>Reseller API Balances & Wholesale Budget Ledger</span>
+                  </h2>
+                  <p className="text-xs text-neutral-400">Track external supplier balances, loaded funds, order fulfillment spend, and net margins</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsTopUpModalOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-600/20 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Record API Top-up</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Time Period Filter Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900/60 p-3 rounded-2xl border border-neutral-800">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-neutral-400 font-medium mr-1 flex items-center gap-1">
+                    <Filter className="w-3.5 h-3.5" /> Filter Range:
+                  </span>
+                  {[
+                    { id: "all", label: "All Time" },
+                    { id: "day", label: "Today (24h)" },
+                    { id: "week", label: "Last 7 Days" },
+                    { id: "month", label: "Last 30 Days" },
+                    { id: "custom", label: "Custom Range" },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setBudgetPeriod(p.id as any)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                        budgetPeriod === p.id 
+                          ? "bg-purple-600 text-white shadow" 
+                          : "bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
 
-                <select
-                  value={paymentProviderFilter}
-                  onChange={(e) => setPaymentProviderFilter(e.target.value)}
-                  className="bg-secondary/60 border border-border/80 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                {budgetPeriod === "custom" && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={budgetStartDate}
+                      onChange={e => setBudgetStartDate(e.target.value)}
+                      className="px-2.5 py-1 bg-neutral-950 border border-neutral-700 rounded-lg text-xs text-white"
+                    />
+                    <span className="text-neutral-500 text-xs">to</span>
+                    <input
+                      type="date"
+                      value={budgetEndDate}
+                      onChange={e => setBudgetEndDate(e.target.value)}
+                      className="px-2.5 py-1 bg-neutral-950 border border-neutral-700 rounded-lg text-xs text-white"
+                    />
+                    <button
+                      onClick={loadBudgetLedger}
+                      className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* KPI Summary Cards */}
+              {resellerBudget && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-b from-emerald-500/20 to-emerald-500/5 p-5 rounded-2xl border border-emerald-500/30 backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-neutral-400">Total API Wallet Balances</span>
+                      <Wallet className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-emerald-400">
+                      ${resellerBudget.total_balance_usd.toFixed(2)}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-1">Available across active providers</div>
+                  </div>
+
+                  <div className="bg-gradient-to-b from-rose-500/20 to-rose-500/5 p-5 rounded-2xl border border-rose-500/30 backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-neutral-400">Period Wholesale Spend</span>
+                      <TrendingDown className="w-4 h-4 text-rose-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-rose-400">
+                      ${resellerBudget.total_spent_usd.toFixed(2)}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-1">{resellerBudget.orders_count} wholesale orders placed</div>
+                  </div>
+
+                  <div className="bg-gradient-to-b from-purple-500/20 to-purple-500/5 p-5 rounded-2xl border border-purple-500/30 backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-neutral-400">Period Top-ups Loaded</span>
+                      <TrendingUp className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-purple-400">
+                      ${resellerBudget.total_loaded_usd.toFixed(2)}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-1">Deposits in selected range</div>
+                  </div>
+
+                  <div className="bg-gradient-to-b from-blue-500/20 to-blue-500/5 p-5 rounded-2xl border border-blue-500/30 backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-neutral-400">Active API Providers</span>
+                      <Layers className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-blue-400">
+                      {resellerBudget.balances.length} Sources
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-1">Canboso, GGSoma, CGPT, etc.</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Provider Wallets Live Grid */}
+              <div className="space-y-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-purple-400" />
+                  <span>Wholesale Provider Balances</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {resellerBudget?.balances.map(source => (
+                    <div key={source.id} className="bg-neutral-900/70 border border-neutral-800 p-5 rounded-2xl flex flex-col justify-between space-y-3 hover:border-neutral-700 transition">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-xs font-mono font-bold text-purple-300 uppercase tracking-wider">{source.name}</span>
+                          <p className="text-[11px] text-neutral-400 mt-0.5">Provider ID: #{source.id}</p>
+                        </div>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          source.balance < 5 
+                            ? "bg-rose-950 text-rose-300 border border-rose-500/30 animate-pulse" 
+                            : "bg-emerald-950 text-emerald-300 border border-emerald-500/30"
+                        }`}>
+                          {source.balance < 5 ? "LOW BALANCE" : "HEALTHY"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="text-2xl font-bold font-mono text-white">
+                          ${source.balance.toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
+                          {source.last_synced ? `Synced: ${new Date(source.last_synced).toLocaleTimeString()}` : "Live API ready"}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setTopUpSourceId(source.id);
+                          setIsTopUpModalOpen(true);
+                        }}
+                        className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold rounded-xl transition border border-neutral-700/60 flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Record Deposit</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top-up History Ledger */}
+              <div className="space-y-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-purple-400" />
+                  <span>Wholesale Top-Up & Deposit History</span>
+                </h3>
+
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-900 border-b border-neutral-800 text-neutral-400 uppercase text-[10px]">
+                      <tr>
+                        <th className="py-3 px-4">Provider</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Payment Method</th>
+                        <th className="py-3 px-4">Note / Reason</th>
+                        <th className="py-3 px-4">Tx Hash / Ref</th>
+                        <th className="py-3 px-4">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60 font-sans">
+                      {resellerBudget?.topups.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-neutral-500 text-xs">
+                            No top-ups recorded in this date range. Click "+ Record API Top-up" to log deposits.
+                          </td>
+                        </tr>
+                      ) : (
+                        resellerBudget?.topups.map(t => (
+                          <tr key={t.id} className="hover:bg-neutral-800/30 transition">
+                            <td className="py-3 px-4 font-bold text-purple-300 font-mono uppercase">{t.source_name}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-emerald-400 text-sm">
+                              +${t.amount.toFixed(2)}
+                            </td>
+                            <td className="py-3 px-4 text-neutral-300 font-mono text-[11px]">{t.payment_method || "USDT"}</td>
+                            <td className="py-3 px-4 text-neutral-300">{t.note || "-"}</td>
+                            <td className="py-3 px-4 text-neutral-500 font-mono text-[11px] truncate max-w-[120px]">{t.tx_hash || "-"}</td>
+                            <td className="py-3 px-4 text-neutral-400 font-mono text-[11px]">
+                              {t.created_at ? new Date(t.created_at).toLocaleString() : ""}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: PROMOCODES */}
+          {activeTab === "promocodes" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Discount Promocodes</h2>
+                  <p className="text-xs text-neutral-400">Create discount codes for customer promotions</p>
+                </div>
+                <button
+                  onClick={() => setIsAddPromoOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition"
                 >
-                  <option value="all">All Providers</option>
-                  <option value="bybit_uid">Bybit UID</option>
-                  <option value="binance_uid">Binance Pay</option>
-                  <option value="onchain_trc20">TRC20 (USDT)</option>
-                  <option value="onchain_bep20">BEP20 (USDT)</option>
-                  <option value="cryptopay">CryptoPay</option>
-                  <option value="stars">Telegram Stars</option>
-                </select>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Promocode</span>
+                </button>
               </div>
 
-              <p className="text-xs text-muted-foreground font-medium">
-                {filteredPayments.length} transactions
-              </p>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {promocodes.map(promo => (
+                  <div key={promo.id} className="bg-neutral-900/60 border border-neutral-800 p-5 rounded-2xl flex flex-col justify-between">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-base font-bold text-purple-300 font-mono tracking-wider">{promo.code}</span>
+                        <p className="text-xs text-neutral-400 mt-1">
+                          {promo.discount_type === "percent" ? `${promo.discount_value}% Discount` : `$${promo.discount_value} Flat Off`}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
+                        {promo.current_uses} / {promo.max_uses === 0 ? "∞" : promo.max_uses} used
+                      </span>
+                    </div>
 
-            <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Gateway / Provider</th>
-                      <th className="px-5 py-3 font-semibold">Transfer ID / Tx Hash</th>
-                      <th className="px-5 py-3 font-semibold">User ID</th>
-                      <th className="px-5 py-3 font-semibold">Amount</th>
-                      <th className="px-5 py-3 font-semibold">Status</th>
-                      <th className="px-5 py-3 font-semibold text-right">Created Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredPayments.map((p) => (
-                      <tr key={p.id} className="hover:bg-accent/40 transition-colors">
-                        <td className="px-5 py-4">
-                          <span className="font-bold text-foreground uppercase tracking-wider text-xs px-2.5 py-1 rounded bg-secondary">
-                            {p.provider}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 font-mono text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-foreground max-w-[200px] truncate" title={p.external_id}>
-                              {p.external_id}
-                            </span>
-                            <button
-                              onClick={() => copyToClipboard(p.external_id, `pay_${p.id}`)}
-                              className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                              title="Copy Tx ID"
-                            >
-                              {copiedId === `pay_${p.id}` ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{p.user_id}</td>
-                        <td className="px-5 py-4 font-bold text-primary">
-                          ${p.amount.toFixed(2)} <span className="text-xs text-muted-foreground font-normal">{p.currency}</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                p.status === "succeeded"
-                                  ? "bg-emerald-500/15 text-emerald-400"
-                                  : p.status === "pending"
-                                  ? "bg-amber-500/15 text-amber-400"
-                                  : "bg-destructive/15 text-destructive"
-                              }`}
-                            >
-                              {p.status}
-                            </span>
-                            {p.status === "pending" && (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleApprovePayment(p.id)}
-                                  className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[11px] font-bold"
-                                  title="Approve & credit user balance"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleRejectPayment(p.id)}
-                                  className="px-2 py-0.5 bg-rose-500 hover:bg-rose-600 text-white rounded text-[11px] font-bold"
-                                  title="Reject payment"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-xs text-muted-foreground text-right whitespace-nowrap">
-                          {p.created_at ? new Date(p.created_at).toLocaleString() : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    <div className="flex items-center justify-end mt-4 pt-3 border-t border-neutral-800">
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Delete promocode ${promo.code}?`)) return;
+                          await api.delete(`/admin/promocodes/${promo.id}`);
+                          setPromocodes(prev => prev.filter(p => p.id !== promo.id));
+                          showToast("Promocode deleted");
+                        }}
+                        className="text-xs text-rose-400 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── TAB 6: AUDIT LOGS ────────────────────────────────────────────── */}
-        {activeTab === "audit" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search actions, details, user..."
-                  value={auditSearch}
-                  onChange={(e) => setAuditSearch(e.target.value)}
-                  className="w-full bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors"
-                />
+          {/* TAB 9: STORE SETTINGS, QR UPLOADER & WEBSITE COPY */}
+          {activeTab === "settings" && (
+            <div className="space-y-8 max-w-4xl animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Bolt className="w-5 h-5 text-purple-400" />
+                  <span>Store Rules, Nepal QR & Website Customizer</span>
+                </h2>
+                <p className="text-xs text-neutral-400">Manage Geo-IP restrictions, upload QR photos, and edit customer-facing announcement banners & mantra</p>
               </div>
-              <p className="text-xs text-muted-foreground font-medium">
-                {filteredAuditLogs.length} audit trail events
-              </p>
-            </div>
 
-            <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Timestamp</th>
-                      <th className="px-5 py-3 font-semibold">Level</th>
-                      <th className="px-5 py-3 font-semibold">Action</th>
-                      <th className="px-5 py-3 font-semibold">Actor / User ID</th>
-                      <th className="px-5 py-3 font-semibold">Resource</th>
-                      <th className="px-5 py-3 font-semibold">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredAuditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-accent/40 transition-colors">
-                        <td className="px-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
-                          {log.timestamp ? new Date(log.timestamp).toLocaleString() : "—"}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
-                              log.level === "ERROR"
-                                ? "bg-destructive/20 text-destructive"
-                                : log.level === "WARN"
-                                ? "bg-amber-500/20 text-amber-400"
-                                : "bg-blue-500/20 text-blue-400"
-                            }`}
-                          >
-                            {log.level}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 font-bold font-mono text-xs text-foreground">
-                          {log.action}
-                        </td>
-                        <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">
-                          {log.user_id || "System"}
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-muted-foreground">
-                          {log.resource_type ? `${log.resource_type}: ${log.resource_id || ""}` : "—"}
-                        </td>
-                        <td className="px-5 py-3.5 text-xs text-foreground/90 max-w-xs truncate" title={log.details || ""}>
-                          {log.details || "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+              <form onSubmit={handleSaveSettings} className="space-y-8">
+                {/* Section 1: Customer Site Top Copy & Sacred Mantra */}
+                <div className="bg-neutral-900/60 border border-purple-500/30 p-6 rounded-3xl space-y-5 shadow-lg">
+                  <div className="border-b border-neutral-800 pb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        <span>Customer Website Header & Announcement Copy</span>
+                      </h3>
+                      <p className="text-xs text-neutral-400">Edit the top sacred mantra bar, hero title, and broadcast announcements</p>
+                    </div>
+                  </div>
 
-        {/* ── TAB 7: NEPAL QR MANAGER ─────────────────────────────────────── */}
-        {activeTab === "nepal_qr" && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-red-400 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 inline-block mb-2">
-                🇳🇵 Payment Configuration
-              </span>
-              <h2 className="text-3xl font-extrabold">Nepal QR Code Manager</h2>
-              <p className="text-muted-foreground text-xs mt-1">
-                Upload or update your eSewa, Khalti, or Fonepay QR image and payment instructions for Nepal customers.
-              </p>
-            </div>
+                  {/* Mantra Bar Text */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                      <span>Top Sacred Mantra Bar Text</span>
+                      <span className="text-neutral-500 text-[11px]">Freezes at the very top of both stores</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.mantra_bar_text}
+                      onChange={e => setSettings(prev => ({ ...prev, mantra_bar_text: e.target.value }))}
+                      placeholder="॥ ॐ क्रीं कालिकायै नमः • दिव्य डिजिटल शक्ति एवं अचूक सुरक्षा ॥"
+                      className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-purple-200 focus:outline-none focus:border-purple-500 font-sans"
+                    />
+                  </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Config Form */}
-              <form onSubmit={handleSaveNepalQr} className="glass-card p-6 md:p-8 rounded-3xl space-y-5 border border-red-500/30">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    QR Code Image URL / File Link:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="https://i.imgur.com/your-qr-image.png or URL"
-                    value={nepalQrUrl}
-                    onChange={(e) => setNepalQrUrl(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-xs font-mono text-foreground focus:outline-none focus:border-red-500"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Paste image URL (Imgur / Discord / Direct web link).
-                  </p>
+                  {/* Hero Title and Subtitle */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-neutral-300">Hero Section Main Title</label>
+                      <input
+                        type="text"
+                        value={settings.hero_title}
+                        onChange={e => setSettings(prev => ({ ...prev, hero_title: e.target.value }))}
+                        className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-neutral-300">Hero Subtitle / Description</label>
+                      <input
+                        type="text"
+                        value={settings.hero_subtitle}
+                        onChange={e => setSettings(prev => ({ ...prev, hero_subtitle: e.target.value }))}
+                        className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Announcement Banner Box */}
+                  <div className="p-4 bg-neutral-950/80 border border-neutral-800 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-white">Broadcast Announcement Banner</span>
+                        <p className="text-[11px] text-neutral-400">Display an emergency alert or promotional banner to visitors</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSettings(prev => ({ ...prev, announcement_banner_enabled: !prev.announcement_banner_enabled }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          settings.announcement_banner_enabled ? "bg-purple-600" : "bg-neutral-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            settings.announcement_banner_enabled ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {settings.announcement_banner_enabled && (
+                      <div className="space-y-3 pt-3 border-t border-neutral-800">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-neutral-300">Announcement Banner Text</label>
+                          <input
+                            type="text"
+                            value={settings.announcement_banner_text}
+                            onChange={e => setSettings(prev => ({ ...prev, announcement_banner_text: e.target.value }))}
+                            placeholder="e.g. ⚡ Special Dashain Offer: 20% Extra Wallet Bonus on all Nepal QR Deposits!"
+                            className="w-full px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-xl text-xs text-amber-200 focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <label className="text-xs text-neutral-400">Banner Theme:</label>
+                          {["info", "warning", "success"].map(type => (
+                            <label key={type} className="flex items-center gap-1.5 cursor-pointer text-xs uppercase text-neutral-300 font-mono">
+                              <input
+                                type="radio"
+                                name="bannerType"
+                                value={type}
+                                checked={settings.announcement_banner_type === type}
+                                onChange={e => setSettings(prev => ({ ...prev, announcement_banner_type: e.target.value }))}
+                              />
+                              <span>{type}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    Payment Method Title:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="eSewa / Khalti / Fonepay Direct QR"
-                    value={nepalQrTitle}
-                    onChange={(e) => setNepalQrTitle(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-xs font-bold text-foreground focus:outline-none focus:border-red-500"
-                  />
+                {/* Section 2: Nepal QR Code Uploader & Payment Messaging */}
+                <div className="bg-neutral-900/60 border border-amber-500/30 p-6 rounded-3xl space-y-5 shadow-lg">
+                  <div className="border-b border-neutral-800 pb-3">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <QrCode className="w-5 h-5 text-amber-400" />
+                      <span>Nepal QR Merchant & Payment Photo Uploader</span>
+                    </h3>
+                    <p className="text-xs text-neutral-400">Upload your direct eSewa / Khalti / Fonepay QR image and customize the checkout instructions</p>
+                  </div>
+
+                  {/* QR Image Preview & Upload Controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+                    <div className="flex flex-col items-center justify-center p-4 bg-neutral-950 border border-neutral-800 rounded-2xl text-center space-y-3">
+                      <div className="text-xs font-semibold text-neutral-300">Current QR Code Image</div>
+                      {settings.nepal_qr_url ? (
+                        <div className="relative group">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={settings.nepal_qr_url}
+                            alt="Nepal QR Code"
+                            className="w-36 h-36 object-contain rounded-xl border border-amber-500/40 bg-white p-1"
+                          />
+                          <span className="text-[10px] text-emerald-400 block mt-1.5 font-mono">✓ Active in Store</span>
+                        </div>
+                      ) : (
+                        <div className="w-36 h-36 rounded-xl border-2 border-dashed border-neutral-700 flex flex-col items-center justify-center text-neutral-500 p-2">
+                          <QrCode className="w-8 h-8 mb-1" />
+                          <span className="text-[10px]">No image uploaded</span>
+                        </div>
+                      )}
+
+                      <label className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl cursor-pointer transition shadow-md flex items-center justify-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isUploadingQr ? "Uploading..." : "Upload New QR Photo"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleQrFileUpload}
+                          disabled={isUploadingQr}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="md:col-span-2 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-neutral-300">Gateway Title</label>
+                          <input
+                            type="text"
+                            value={settings.nepal_qr_title}
+                            onChange={e => setSettings(prev => ({ ...prev, nepal_qr_title: e.target.value }))}
+                            placeholder="eSewa / Khalti / Fonepay Direct QR"
+                            className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-neutral-300">Account Holder Name</label>
+                          <input
+                            type="text"
+                            value={settings.nepal_qr_account_name}
+                            onChange={e => setSettings(prev => ({ ...prev, nepal_qr_account_name: e.target.value }))}
+                            placeholder="Kali Store Nepal"
+                            className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-neutral-300">eSewa / Fonepay Phone / ID</label>
+                          <input
+                            type="text"
+                            value={settings.nepal_qr_account_id}
+                            onChange={e => setSettings(prev => ({ ...prev, nepal_qr_account_id: e.target.value }))}
+                            placeholder="98XXXXXXXX"
+                            className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-neutral-300">NPR per $1 USD Exchange Multiplier</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={settings.npr_exchange_rate}
+                            onChange={e => setSettings(prev => ({ ...prev, npr_exchange_rate: parseFloat(e.target.value) || 135 }))}
+                            className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-neutral-300">Customer Payment Page Instructions</label>
+                        <textarea
+                          rows={2}
+                          value={settings.nepal_qr_instructions}
+                          onChange={e => setSettings(prev => ({ ...prev, nepal_qr_instructions: e.target.value }))}
+                          placeholder="Scan QR with eSewa/Khalti/Fonepay, transfer exact NPR amount, then submit your Tx Reference ID below."
+                          className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500 leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    Account Holder Name:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Kali Store Nepal"
-                    value={nepalQrAccountName}
-                    onChange={(e) => setNepalQrAccountName(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-xs font-bold text-foreground focus:outline-none focus:border-red-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    eSewa / Fonepay Mobile Number / ID:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 9812345678"
-                    value={nepalQrAccountId}
-                    onChange={(e) => setNepalQrAccountId(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-xs font-mono font-bold text-foreground focus:outline-none focus:border-red-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5">
-                    Customer Payment Instructions:
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Instructions for customers..."
-                    value={nepalQrInstructions}
-                    onChange={(e) => setNepalQrInstructions(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-red-500"
-                  />
-                </div>
-
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                {/* Section 3: Geo-IP Rules */}
+                <div className="bg-neutral-900/60 border border-neutral-800 p-6 rounded-3xl space-y-4 shadow-lg">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <span>🇳🇵</span> Nepal Store "Coming Soon" Banner
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Enable to show a prominent "Coming Soon" message on the Nepal Store page, or turn off to remove it.
+                      <div className="text-sm font-semibold text-white flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-purple-400" />
+                        <span>Automatic Nepal IP-Based Store Restriction</span>
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        When enabled, visitors detected from Nepal are automatically locked into Nepal Store (NPR) and restricted from global crypto stores.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setNepalComingSoon(!nepalComingSoon)}
-                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all shadow-md flex items-center gap-1.5 ${
-                        nepalComingSoon
-                          ? 'bg-amber-500 text-black shadow-amber-500/30'
-                          : 'bg-secondary text-muted-foreground border border-border'
+                      onClick={() => setSettings(prev => ({ ...prev, geo_filtering_enabled: !prev.geo_filtering_enabled }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        settings.geo_filtering_enabled ? "bg-purple-600" : "bg-neutral-700"
                       }`}
                     >
-                      {nepalComingSoon ? '✓ Banner Active' : '✕ Banner Hidden'}
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          settings.geo_filtering_enabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section 4: Auto Delivery Engine & Message Template Customizer */}
+                <div className="bg-neutral-900/60 border border-emerald-500/30 p-6 rounded-3xl space-y-5 shadow-lg">
+                  <div className="border-b border-neutral-800 pb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <Bolt className="w-5 h-5 text-emerald-400" />
+                        <span>Automated API Purchase & Email Delivery Engine</span>
+                      </h3>
+                      <p className="text-xs text-neutral-400">
+                        Automatically order from wholesale APIs and dispatch credentials directly to customer email with multi-stage Telegram alerts
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSettings(prev => ({ ...prev, global_auto_delivery_enabled: !(prev.global_auto_delivery_enabled !== false) }))}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        settings.global_auto_delivery_enabled !== false ? "bg-emerald-600" : "bg-neutral-700"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          settings.global_auto_delivery_enabled !== false ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
                     </button>
                   </div>
 
-                  {nepalComingSoon && (
-                    <div className="pt-2 border-t border-amber-500/20">
-                      <label className="block text-[11px] font-bold text-amber-300 uppercase mb-1">
-                        Announcement Text:
-                      </label>
-                      <input
-                        type="text"
-                        value={nepalComingSoonText}
-                        onChange={(e) => setNepalComingSoonText(e.target.value)}
-                        className="w-full bg-black/40 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-amber-400 font-medium"
-                        placeholder="Coming soon announcement text..."
-                      />
+                  <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-neutral-300">Global Auto-Delivery Status:</span>
+                      <span className={`font-mono font-bold px-2.5 py-0.5 rounded-full text-[11px] ${
+                        settings.global_auto_delivery_enabled !== false ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-rose-500/20 text-rose-400 border border-rose-500/40"
+                      }`}>
+                        {settings.global_auto_delivery_enabled !== false ? "⚡ ACTIVE (API + Vault Auto Dispatch)" : "⏸️ DISABLED (Manual Verification Queue)"}
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {nepalQrSaveSuccess && (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 font-bold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>Nepal QR payment and Coming Soon settings saved successfully!</span>
+                    <div className="text-[11px] text-neutral-400 leading-relaxed">
+                      Real-time stage tracking updates (<code>[STAGE 1/4]</code> ➔ <code>[STAGE 2/4]</code> ➔ <code>[STAGE 3/4]</code> ➔ <code>[STAGE 4/4]</code>) are automatically broadcasted to the support/alert Telegram channel for complete administrative transparency.
+                    </div>
                   </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={isSavingNepalQr}
-                  className="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs rounded-xl transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2"
-                >
-                  {isSavingNepalQr ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Saving Configuration...
-                    </>
-                  ) : (
-                    <>Save QR Payment Settings</>
-                  )}
-                </button>
-              </form>
+                  {/* Delivery Message Template Editor */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                      <span>Default Delivery Message Template (Emails & Bot)</span>
+                      <span className="text-neutral-500 text-[11px]">Used whenever a product does not have an item override</span>
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={settings.global_delivery_template || ""}
+                      onChange={e => setSettings(prev => ({ ...prev, global_delivery_template: e.target.value }))}
+                      placeholder="Hello {customer_email},&#10;&#10;Your order for {product_name} (x{quantity}) is ready!&#10;&#10;Credentials:&#10;{credentials}&#10;&#10;Warranty: {warranty}&#10;Support: {support_contact}"
+                      className="w-full px-3.5 py-2.5 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white font-mono leading-relaxed focus:outline-none focus:border-emerald-500"
+                    />
 
-              {/* Live Preview Box */}
-              <div className="glass-card p-6 md:p-8 rounded-3xl border border-border/60 flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                  Customer Checkout Preview
-                </span>
-
-                <div className="w-full max-w-sm p-5 rounded-2xl bg-black/40 border border-red-500/30 text-center space-y-3">
-                  <span className="text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 inline-block">
-                    {nepalQrTitle || "eSewa / Fonepay Direct QR"}
-                  </span>
-
-                  {nepalQrUrl ? (
-                    <div className="my-2 p-2 bg-white rounded-xl inline-block shadow-md">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={nepalQrUrl}
-                        alt="Nepal Payment QR Code"
-                        className="w-44 h-44 object-contain mx-auto"
-                      />
+                    {/* Placeholder helper chips */}
+                    <div className="pt-1">
+                      <span className="text-[11px] text-neutral-400 font-semibold block mb-1.5">Available dynamic placeholders (click to insert):</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          "{customer_email}",
+                          "{product_name}",
+                          "{quantity}",
+                          "{credentials}",
+                          "{amount}",
+                          "{warranty}",
+                          "{note}",
+                          "{tx_id}",
+                          "{support_contact}"
+                        ].map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, global_delivery_template: (prev.global_delivery_template || "") + " " + tag }))}
+                            className="px-2 py-0.5 bg-neutral-800 hover:bg-neutral-700 text-purple-300 font-mono text-[10px] rounded-lg border border-neutral-700 transition"
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="w-44 h-44 bg-secondary/80 rounded-xl border border-dashed border-border flex flex-col items-center justify-center mx-auto my-2 text-muted-foreground">
-                      <Sparkles className="w-8 h-8 mb-1 text-red-400" />
-                      <span className="text-[11px] font-bold">No Image Uploaded</span>
-                    </div>
-                  )}
-
-                  <p className="text-xs font-bold text-foreground">
-                    Account: <span className="text-primary">{nepalQrAccountName || "Kali Store Nepal"}</span>
-                  </p>
-                  <p className="text-xs font-mono text-muted-foreground">
-                    ID / Number: <code>{nepalQrAccountId || "9800000000"}</code>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground italic">
-                    {nepalQrInstructions || "Scan QR code to pay exact NPR amount"}
-                  </p>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* ── TAB: PROMOCODES & DISCOUNTS ──────────────────────────────────── */}
-        {activeTab === "promocodes" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold">Promocodes & Discount Coupons</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Manage store promo codes, percentage discounts, and max usage limits.</p>
-              </div>
-              <button
-                onClick={() => setIsAddPromoOpen(true)}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all"
-              >
-                + Create Promocode
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-8 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-xl shadow-purple-600/30 transition cursor-pointer"
+                  >
+                    Save All Store Settings
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: ADD PRODUCT */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isAddProductOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-xl rounded-3xl p-6 space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-purple-400" />
+                <span>Create New Product</span>
+              </h3>
+              <button onClick={() => setIsAddProductOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="glass-card rounded-2xl overflow-hidden border border-border/50">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/70 border-b border-border/60 text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Code</th>
-                      <th className="px-5 py-3 font-semibold">Discount</th>
-                      <th className="px-5 py-3 font-semibold">Usage</th>
-                      <th className="px-5 py-3 font-semibold">Status</th>
-                      <th className="px-5 py-3 font-semibold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {promocodes.map((promo) => (
-                      <tr key={promo.id} className="hover:bg-accent/40 transition-colors">
-                        <td className="px-5 py-4 font-mono font-bold text-foreground">{promo.code}</td>
-                        <td className="px-5 py-4 font-bold text-emerald-400">
-                          {promo.discount_type === "percent" ? `${promo.discount_value}% OFF` : `$${promo.discount_value} OFF`}
-                        </td>
-                        <td className="px-5 py-4 text-xs text-muted-foreground">
-                          {promo.current_uses} / {promo.max_uses > 0 ? promo.max_uses : "∞"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400">
-                            {promo.is_active ? "Active" : "Disabled"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <button
-                            onClick={() => handleDeletePromo(promo.id)}
-                            className="p-1 text-rose-400 hover:text-rose-300 text-xs font-bold"
-                            title="Delete promocode"
-                          >
-                            ✕ Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <form onSubmit={handleCreateProduct} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Product Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Netflix 1 Month Ultra HD Account"
+                  value={newProdName}
+                  onChange={e => setNewProdName(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* ── MODAL: CREATE PRODUCT ────────────────────────────────────────── */}
-        {isAddProductOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 md:p-8 rounded-2xl max-w-lg w-full border border-border shadow-2xl space-y-4">
-              <h3 className="text-xl font-bold">Add New Digital Product</h3>
-              <form onSubmit={handleCreateProduct} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Product Name:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. ChatGPT Plus Account"
-                    value={newProdName}
-                    onChange={(e) => setNewProdName(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-primary"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Product Description</label>
+                <textarea
+                  rows={3}
+                  value={newProdDesc}
+                  onChange={e => setNewProdDesc(e.target.value)}
+                  placeholder="Enter detailed description, key features, instructions..."
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white text-xs focus:outline-none focus:border-purple-500 leading-relaxed"
+                />
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Category:</label>
-                    <select
-                      value={newProdCatId}
-                      onChange={(e) => setNewProdCatId(parseInt(e.target.value))}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-primary"
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Warranty:</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 24 Hours"
-                      value={newProdWarranty}
-                      onChange={(e) => setNewProdWarranty(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Sell Price ($ USD):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="e.g. 5.00"
-                      value={newProdPrice}
-                      onChange={(e) => setNewProdPrice(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Cost Price ($ USD):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 2.50"
-                      value={newProdCostPrice}
-                      onChange={(e) => setNewProdCostPrice(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Initial Stock Keys / Accounts (One per line):</label>
-                  <textarea
-                    rows={4}
-                    placeholder="user1:pass1&#10;user2:pass2&#10;KEY-12345"
-                    value={newProdKeys}
-                    onChange={(e) => setNewProdKeys(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl p-3 font-mono text-xs focus:outline-none focus:border-primary"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddProductOpen(false)}
-                    className="flex-1 py-2 bg-secondary text-secondary-foreground rounded-xl text-xs font-bold"
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Category *</label>
+                  <select
+                    value={newProdCatId}
+                    onChange={e => setNewProdCatId(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold shadow-lg shadow-primary/20"
-                  >
-                    Create Product
-                  </button>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
 
-        {/* ── MODAL: BULK ADD KEYS ────────────────────────────────────────── */}
-        {addKeysProduct && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 rounded-2xl max-w-md w-full border border-border space-y-4">
-              <h3 className="text-xl font-bold">Add Keys to {addKeysProduct.name}</h3>
-              <form onSubmit={handleAddStockKeys} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Paste Stock Accounts / Keys (One per line):</label>
-                  <textarea
-                    rows={6}
-                    required
-                    placeholder="user1:pass1&#10;user2:pass2&#10;KEY-99999"
-                    value={stockKeysInput}
-                    onChange={(e) => setStockKeysInput(e.target.value)}
-                    className="w-full bg-black/40 border border-border rounded-xl p-3 font-mono text-xs focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setAddKeysProduct(null)}
-                    className="flex-1 py-2 bg-secondary rounded-xl text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20"
-                  >
-                    Add to Stock
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ── MODAL: ADD CATEGORY ──────────────────────────────────────────── */}
-        {isAddCategoryOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 rounded-2xl max-w-sm w-full border border-border space-y-4">
-              <h3 className="text-xl font-bold">Add New Category</h3>
-              <form onSubmit={handleCreateCategory} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Category Name:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Subscriptions"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddCategoryOpen(false)}
-                    className="flex-1 py-2 bg-secondary rounded-xl text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ── MODAL: CREATE PROMOCODE ──────────────────────────────────────── */}
-        {isAddPromoOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 rounded-2xl max-w-sm w-full border border-border space-y-4">
-              <h3 className="text-xl font-bold">Create Promocode</h3>
-              <form onSubmit={handleCreatePromo} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Promo Code:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. NEPAL50"
-                    value={newPromoCode}
-                    onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Type:</label>
-                    <select
-                      value={newPromoType}
-                      onChange={(e) => setNewPromoType(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
-                    >
-                      <option value="percent">Percentage (%)</option>
-                      <option value="fixed">Fixed ($ USD)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Value:</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="e.g. 20"
-                      value={newPromoValue}
-                      onChange={(e) => setNewPromoValue(e.target.value)}
-                      className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Max Uses (0 = Infinite):</label>
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Selling Price ($ USD) *</label>
                   <input
                     type="number"
-                    value={newPromoMaxUses}
-                    onChange={(e) => setNewPromoMaxUses(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    step="0.01"
+                    required
+                    placeholder="4.99"
+                    value={newProdPrice}
+                    onChange={e => setNewProdPrice(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono"
                   />
                 </div>
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddPromoOpen(false)}
-                    className="flex-1 py-2 bg-secondary rounded-xl text-xs font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20"
-                  >
-                    Create Code
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
-        {/* ── MODAL: BALANCE ADJUST ────────────────────────────────────────── */}
-        {balanceModalUser && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 md:p-8 rounded-2xl max-w-md w-full border border-border shadow-2xl space-y-6">
-              <div>
-                <h3 className="text-xl font-bold">Adjust User Balance</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  User: <span className="font-semibold text-foreground">{balanceModalUser.email || balanceModalUser.telegram_id}</span>
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Current Balance: <span className="font-bold text-primary">${balanceModalUser.balance.toFixed(2)}</span>
-                </p>
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Price (NPR रु) <span className="text-neutral-500 font-normal">Override</span></label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder={`Auto (Rs. ${newProdPrice ? Math.round(parseFloat(newProdPrice) * (settings.npr_exchange_rate || 135)) : 0})`}
+                    value={newProdPriceNpr}
+                    onChange={e => setNewProdPriceNpr(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
               </div>
 
-              <form onSubmit={handleBalanceSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-muted-foreground mb-1.5">
-                    Amount to Add (+) or Deduct (-) (USD)
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Cost Price ($ USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="2.50"
+                    value={newProdCostPrice}
+                    onChange={e => setNewProdCostPrice(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Warranty</label>
+                  <input
+                    type="text"
+                    value={newProdWarranty}
+                    onChange={e => setNewProdWarranty(e.target.value)}
+                    placeholder="e.g. 24 Hours, 30 Days"
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Badge Text (Optional)</label>
+                  <input
+                    type="text"
+                    value={newProdBadgeText}
+                    onChange={e => setNewProdBadgeText(e.target.value)}
+                    placeholder="e.g. 50% OFF, LIMITED"
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Mode & Account Type Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Delivery Mode</label>
+                  <select
+                    value={newProdDeliveryType}
+                    onChange={e => setNewProdDeliveryType(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="instant">⚡ Instant Delivery (Automated)</option>
+                    <option value="manual">⏱️ Manual Dispatch (Staff / Pre-order)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Account / Key Type</label>
+                  <select
+                    value={newProdAccountType}
+                    onChange={e => setNewProdAccountType(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="preactivated">🔑 Pre-Activated Account</option>
+                    <option value="existing_account">👤 Existing User Account / Upgrade</option>
+                    <option value="key">🛡️ License Key / Activation Code</option>
+                    <option value="invite">📩 Direct Workspace / Team Invite</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Highlight Toggles */}
+              <div className="flex items-center gap-4 py-2 border-y border-neutral-800/60">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newProdFeatured}
+                    onChange={e => setNewProdFeatured(e.target.checked)}
+                    className="rounded bg-neutral-950 border-neutral-700 text-purple-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>Featured</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newProdHot}
+                    onChange={e => setNewProdHot(e.target.checked)}
+                    className="rounded bg-neutral-950 border-neutral-700 text-rose-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Hot</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newProdBestseller}
+                    onChange={e => setNewProdBestseller(e.target.checked)}
+                    className="rounded bg-neutral-950 border-neutral-700 text-amber-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Best Seller</span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Auto Delivery Engine Toggle & Custom Template */}
+              <div className="p-3.5 bg-neutral-950/80 border border-neutral-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-white flex items-center gap-1.5">
+                      <Bolt className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Allow Automated Delivery</span>
+                    </span>
+                    <p className="text-[11px] text-neutral-400">Auto-order from Provider API / Stock and dispatch email with Telegram alerts</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewProdAutoDelivery(!newProdAutoDelivery)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      newProdAutoDelivery ? "bg-emerald-600" : "bg-neutral-700"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        newProdAutoDelivery ? "translate-x-4" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
+                  <label className="font-semibold text-neutral-300 flex items-center justify-between text-[11px]">
+                    <span>Custom Item Delivery Template (Optional)</span>
+                    <span className="text-neutral-500 font-normal">Leave blank to use global template</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={newProdDeliveryTemplate}
+                    onChange={e => setNewProdDeliveryTemplate(e.target.value)}
+                    placeholder="Hello {customer_email}, here are your keys: {credentials}"
+                    className="w-full px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-white font-mono text-[11px] focus:outline-none focus:border-purple-500 leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Initial Keys */}
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300 flex items-center justify-between">
+                  <span>Initial Stock Keys / Accounts (One per line)</span>
+                  <span className="text-neutral-500 font-normal">Optional</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={newProdInitialKeys}
+                  onChange={e => setNewProdInitialKeys(e.target.value)}
+                  placeholder="key-12345&#10;user:password&#10;license-ABC-XYZ"
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono text-[11px] focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddProductOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-md shadow-purple-600/30"
+                >
+                  Create Product
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: BULK PRICE ADJUSTMENT */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isBulkPriceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-md rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Percent className="w-4 h-4 text-emerald-400" />
+                <span>Bulk Price Adjustment Tool</span>
+              </h3>
+              <button onClick={() => setIsBulkPriceOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyBulkPrice} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Target Category</label>
+                <select
+                  value={bulkCatId}
+                  onChange={e => setBulkCatId(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="all">⚡ All Products in Store</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id.toString()}>{c.name}</option>
+                  ))}
+                  <option value="999">Wholesale Reseller APIs</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Adjustment Type</label>
+                  <select
+                    value={bulkChangeType}
+                    onChange={e => setBulkChangeType(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed_amount">Fixed USD ($)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">
+                    {bulkChangeType === "percentage" ? "Percent (+10 or -5)" : "Amount (+1.00 or -0.50)"}
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="e.g. 50.00 or -20.00"
-                    value={balanceAdjustAmount}
-                    onChange={(e) => setBalanceAdjustAmount(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
+                    placeholder={bulkChangeType === "percentage" ? "+15" : "+1.50"}
+                    value={bulkChangeValue}
+                    onChange={e => setBulkChangeValue(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Round To Nearest Step</label>
+                <select
+                  value={bulkRounding}
+                  onChange={e => setBulkRounding(parseFloat(e.target.value))}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value={0.25}>$0.25 (e.g. $4.25, $4.50)</option>
+                  <option value={0.50}>$0.50 (e.g. $4.50, $5.00)</option>
+                  <option value={1.00}>$1.00 (e.g. $4.00, $5.00)</option>
+                  <option value={0.01}>$0.01 (Exact Penny)</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl text-[11px] text-amber-200">
+                ⚠️ This will update all items in the selected category immediately across the live store.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkPriceOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/30"
+                >
+                  Apply Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: STOCK & KEYS MANAGER */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isStockModalOpen && stockProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-lg rounded-3xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Key className="w-4 h-4 text-purple-400" />
+                  <span>Stock Keys: {stockProduct.name}</span>
+                </h3>
+                <p className="text-xs text-neutral-400">{stockItems.length} unsold credentials currently in inventory</p>
+              </div>
+              <button onClick={() => setIsStockModalOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Existing Keys List */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-300">Current Inventory</label>
+              <div className="max-h-44 overflow-y-auto bg-neutral-950 p-2.5 rounded-xl border border-neutral-800 divide-y divide-neutral-900 font-mono text-xs">
+                {stockItems.length === 0 ? (
+                  <div className="text-center py-4 text-neutral-600">Out of Stock. Upload keys below.</div>
+                ) : (
+                  stockItems.map(item => (
+                    <div key={item.id} className="py-1.5 px-2 flex items-center justify-between group">
+                      <span className="text-neutral-300 truncate mr-2">{item.value}</span>
+                      <button
+                        onClick={() => handleDeleteStockItem(item.id)}
+                        className="text-neutral-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Bulk Add Box */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-300">Add More Keys / Accounts (One per line)</label>
+              <textarea
+                rows={4}
+                value={newStockKeys}
+                onChange={e => setNewStockKeys(e.target.value)}
+                placeholder="key-ABC-123&#10;user:password&#10;netflix-access-token"
+                className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-purple-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setIsStockModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium"
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={handleAddStockKeys}
+                disabled={!newStockKeys.trim()}
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-purple-600/30"
+              >
+                Upload Keys
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: EDIT PRODUCT */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isEditProductOpen && editingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-lg rounded-3xl p-6 space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-purple-400" />
+                <span>Edit Product Details</span>
+              </h3>
+              <button onClick={() => setIsEditProductOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditProduct} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Product Name</label>
+                <input
+                  type="text"
+                  value={editingProduct.name}
+                  onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-neutral-300">Product Description</label>
+                <textarea
+                  rows={3}
+                  value={editingProduct.description || ""}
+                  onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                  placeholder="Enter detailed description, key features, instructions..."
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white text-xs focus:outline-none focus:border-purple-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Price ($ USD) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingProduct.price}
+                    onChange={e => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-muted-foreground mb-1.5">
-                    Reason / Audit Note
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Price (NPR रु) <span className="text-neutral-500 font-normal">Override</span></label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder={`Auto (Rs. ${Math.round(editingProduct.price * (settings.npr_exchange_rate || 135))})`}
+                    value={editingProduct.price_npr !== null && editingProduct.price_npr !== undefined ? editingProduct.price_npr : ""}
+                    onChange={e => setEditingProduct({ ...editingProduct, price_npr: e.target.value ? parseFloat(e.target.value) : null })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Cost Price ($ USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingProduct.cost_price}
+                    onChange={e => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Warranty</label>
                   <input
                     type="text"
-                    placeholder="e.g. Compensation, Promo grant, manual correction"
-                    value={balanceAdjustReason}
-                    onChange={(e) => setBalanceAdjustReason(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary"
+                    value={editingProduct.warranty || ""}
+                    onChange={e => setEditingProduct({ ...editingProduct, warranty: e.target.value })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Custom Badge Text</label>
+                  <input
+                    type="text"
+                    value={editingProduct.badge_text || ""}
+                    onChange={e => setEditingProduct({ ...editingProduct, badge_text: e.target.value })}
+                    placeholder="e.g. SALE"
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
 
-                <div className="flex gap-3 pt-2">
+              {/* Delivery Mode & Account Type Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Delivery Mode</label>
+                  <select
+                    value={editingProduct.delivery_type || "instant"}
+                    onChange={e => setEditingProduct({ ...editingProduct, delivery_type: e.target.value })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="instant">⚡ Instant Delivery (Automated)</option>
+                    <option value="manual">⏱️ Manual Dispatch (Staff / Pre-order)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-neutral-300">Account / Key Type</label>
+                  <select
+                    value={editingProduct.account_type || "preactivated"}
+                    onChange={e => setEditingProduct({ ...editingProduct, account_type: e.target.value })}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="preactivated">🔑 Pre-Activated Account</option>
+                    <option value="existing_account">👤 Existing User Account / Upgrade</option>
+                    <option value="key">🛡️ License Key / Activation Code</option>
+                    <option value="invite">📩 Direct Workspace / Team Invite</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Badges Toggles */}
+              <div className="flex items-center gap-4 py-2 border-y border-neutral-800/60">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingProduct.is_featured}
+                    onChange={e => setEditingProduct({ ...editingProduct, is_featured: e.target.checked })}
+                    className="rounded bg-neutral-950 border-neutral-700 text-purple-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>Featured</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingProduct.is_hot}
+                    onChange={e => setEditingProduct({ ...editingProduct, is_hot: e.target.checked })}
+                    className="rounded bg-neutral-950 border-neutral-700 text-rose-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Hot</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingProduct.is_bestseller}
+                    onChange={e => setEditingProduct({ ...editingProduct, is_bestseller: e.target.checked })}
+                    className="rounded bg-neutral-950 border-neutral-700 text-amber-600 focus:ring-0"
+                  />
+                  <span className="text-neutral-300 flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Best Seller</span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Auto Delivery Engine Toggle & Custom Template */}
+              <div className="p-3.5 bg-neutral-950/80 border border-neutral-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-white flex items-center gap-1.5">
+                      <Bolt className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Allow Automated Delivery</span>
+                    </span>
+                    <p className="text-[11px] text-neutral-400">Auto-order from Provider API / Stock and dispatch email with Telegram alerts</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setBalanceModalUser(null)}
-                    className="flex-1 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl text-sm font-semibold transition-colors"
+                    onClick={() => setEditingProduct({ ...editingProduct, auto_delivery: !(editingProduct.auto_delivery !== false) })}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      editingProduct.auto_delivery !== false ? "bg-emerald-600" : "bg-neutral-700"
+                    }`}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 transition-all"
-                  >
-                    Confirm Adjust
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        editingProduct.auto_delivery !== false ? "translate-x-4" : "translate-x-1"
+                      }`}
+                    />
                   </button>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
 
-        {/* ── MODAL: VIEW DELIVERED CONTENT / KEY ──────────────────────────── */}
-        {selectedSecret && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="glass-card p-6 md:p-8 rounded-2xl max-w-lg w-full border border-border shadow-2xl space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold">{selectedSecret.title}</h3>
-                <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-bold">
-                  Delivered Asset
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-muted-foreground mb-2">
-                  Content / Account Credentials / Serial Key:
-                </label>
-                <div className="relative">
+                <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
+                  <label className="font-semibold text-neutral-300 flex items-center justify-between text-[11px]">
+                    <span>Item Delivery Message Template</span>
+                    <span className="text-neutral-500 font-normal">Leave blank to use global template</span>
+                  </label>
                   <textarea
-                    readOnly
-                    value={selectedSecret.content}
-                    rows={6}
-                    className="w-full bg-black/50 border border-border rounded-xl p-4 font-mono text-xs text-foreground focus:outline-none resize-none select-all"
+                    rows={3}
+                    value={editingProduct.delivery_template || ""}
+                    onChange={e => setEditingProduct({ ...editingProduct, delivery_template: e.target.value })}
+                    placeholder="Hello {customer_email}, here are your keys: {credentials}"
+                    className="w-full px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl text-white font-mono text-[11px] focus:outline-none focus:border-purple-500 leading-relaxed"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
                 <button
                   type="button"
-                  onClick={() => copyToClipboard(selectedSecret.content, "secret_modal")}
-                  className="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
+                  onClick={() => setIsEditProductOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
                 >
-                  {copiedId === "secret_modal" ? (
-                    <>
-                      <Check className="w-4 h-4" /> Copied to Clipboard!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" /> Copy Content
-                    </>
-                  )}
+                  Cancel
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setSelectedSecret(null)}
-                  className="px-5 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl text-sm font-semibold transition-colors"
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold"
                 >
-                  Close
+                  Save Changes
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: BALANCE ADJUSTMENT */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isBalanceModalOpen && balanceUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-sm rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Adjust Customer Balance</h3>
+              <button onClick={() => setIsBalanceModalOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="text-xs text-neutral-400">
+              Customer: <span className="text-white font-semibold">{balanceUser.email || balanceUser.telegram_id}</span>
+              <br />
+              Current Balance: <span className="text-emerald-400 font-mono font-bold">${balanceUser.balance.toFixed(2)}</span>
+            </div>
+
+            <form onSubmit={handleAdjustBalance} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Adjustment Amount (USD)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="+10.00 or -5.00"
+                  value={balanceAmount}
+                  onChange={e => setBalanceAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Reason</label>
+                <input
+                  type="text"
+                  value={balanceReason}
+                  onChange={e => setBalanceReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBalanceModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-neutral-800 text-neutral-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-semibold"
+                >
+                  Confirm Adjustment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: ORDER CREDENTIALS VIEWER */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isOrderCredentialsOpen && selectedOrderCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-md rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Key className="w-4 h-4 text-purple-400" />
+                <span>Delivered Keys & Credentials</span>
+              </h3>
+              <button onClick={() => setIsOrderCredentialsOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-neutral-950 rounded-xl border border-neutral-800 font-mono text-xs text-purple-200 whitespace-pre-wrap max-h-60 overflow-y-auto select-all">
+              {selectedOrderCredentials}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(selectedOrderCredentials);
+                  showToast("Credentials copied to clipboard!");
+                }}
+                className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy Credentials</span>
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: NEW CATEGORY */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isAddCategoryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-sm rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Create New Category</h3>
+              <button onClick={() => setIsAddCategoryOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Category Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. VPN Services"
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCategoryOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-neutral-800 text-neutral-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-purple-600 text-white font-semibold"
+                >
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: EDIT CATEGORY */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isEditCategoryOpen && editingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-sm rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Rename Category</h3>
+              <button onClick={() => setIsEditCategoryOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCategory} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Category Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCategory.name}
+                  onChange={e => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCategoryOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-neutral-800 text-neutral-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-purple-600 text-white font-semibold"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: USER PURCHASES HISTORY & DELIVERED CREDENTIALS */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isUserPurchasesOpen && userPurchasesUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-2xl rounded-3xl p-6 space-y-5 my-8 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Package className="w-4 h-4 text-purple-400" />
+                  <span>Purchases Ledger: {userPurchasesUser.email || `User #${userPurchasesUser.telegram_id}`}</span>
+                </h3>
+                <p className="text-xs text-neutral-400 font-mono mt-0.5">
+                  Telegram ID: {userPurchasesUser.telegram_id} • Balance: ${userPurchasesUser.balance.toFixed(2)}
+                </p>
+              </div>
+              <button onClick={() => setIsUserPurchasesOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loadingUserPurchases ? (
+              <div className="py-12 flex flex-col items-center justify-center text-neutral-400">
+                <RefreshCw className="w-8 h-8 animate-spin text-purple-500 mb-2" />
+                <span className="text-xs">Loading customer purchase ledger...</span>
+              </div>
+            ) : userPurchasesList.length === 0 ? (
+              <div className="py-12 text-center text-neutral-500 text-xs">
+                No purchases recorded for this customer yet.
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
+                {userPurchasesList.map(item => (
+                  <div key={item.id} className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800 space-y-2.5">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-bold text-white text-xs">{item.item_name}</div>
+                        <div className="text-[10px] text-neutral-500 font-mono">
+                          Order ID: #{item.unique_id} • {new Date(item.bought_datetime).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-bold font-mono text-emerald-400">${item.price.toFixed(2)}</span>
+                        <span className="text-[10px] text-neutral-500 block font-mono">Cost: ${item.cost_price.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
+                        <span>Delivered Credentials / Key:</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.value);
+                            showToast("Copied credentials to clipboard!");
+                          }}
+                          className="flex items-center gap-1 text-purple-400 hover:text-purple-300 font-sans"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </button>
+                      </div>
+                      <pre className="p-2.5 bg-neutral-900 border border-neutral-800/80 rounded-xl text-emerald-300 font-mono text-xs overflow-x-auto whitespace-pre-wrap select-all">
+                        {item.value || "Delivered instantly"}
+                      </pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-3 border-t border-neutral-800 text-xs">
+              <span className="text-neutral-500 font-mono">Total {userPurchasesList.length} items purchased</span>
+              <button
+                type="button"
+                onClick={() => setIsUserPurchasesOpen(false)}
+                className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL: RESELLER TOP-UP RECORD */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {isTopUpModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-900 border border-neutral-800 w-full max-w-md rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-emerald-400" />
+                <span>Record Reseller API Deposit / Top-up</span>
+              </h3>
+              <button onClick={() => setIsTopUpModalOpen(false)} className="text-neutral-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordTopUp} className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">API Provider *</label>
+                <select
+                  value={topUpSourceId}
+                  onChange={e => setTopUpSourceId(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500 uppercase font-mono"
+                >
+                  {resellerBudget?.balances.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (Current Bal: ${s.balance.toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-neutral-300">Amount ($ USD) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="50.00"
+                    value={topUpAmount}
+                    onChange={e => setTopUpAmount(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-semibold text-neutral-300">Payment Method</label>
+                  <input
+                    type="text"
+                    value={topUpMethod}
+                    onChange={e => setTopUpMethod(e.target.value)}
+                    placeholder="USDT TRC20"
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Note / Reference</label>
+                <input
+                  type="text"
+                  value={topUpNote}
+                  onChange={e => setTopUpNote(e.target.value)}
+                  placeholder="e.g. Binance Pay Transfer for Claude Keys"
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-300">Tx Hash / Proof (Optional)</label>
+                <input
+                  type="text"
+                  value={topUpTxHash}
+                  onChange={e => setTopUpTxHash(e.target.value)}
+                  placeholder="0x... or Tx ID"
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsTopUpModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-neutral-800 text-neutral-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/30"
+                >
+                  Save & Update Balance
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
