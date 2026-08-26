@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     "127.0.0.1",
     "localhost",
     "20.164.209.124",
+    "kalidigitalstore.duckdns.org",
     "kalidigitalstore.page.gd",
   ],
 };
